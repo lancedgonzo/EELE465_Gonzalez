@@ -62,11 +62,15 @@ flashLED1:
 ;-------------------------------------------------------------------------------
 delay: 
             mov.w   #0FFFFh, R4
-;            mov.w   #0FFFFh, R5
+            mov.w   #0FFFFh, R5
 
 delay_decInnerLoop:
             dec.w   R4
             jnz     delay_decInnerLoop
+
+delay_decOuterLoop:
+            dec.w   R5
+            jnz     delay_decOuterLoop
             jz      main
 
 ;decOuterLoop:
