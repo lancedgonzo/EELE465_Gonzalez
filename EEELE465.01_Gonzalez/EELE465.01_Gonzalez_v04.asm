@@ -42,15 +42,17 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Stop watchdog timer
 
 init: 
         ;-Port Setups (LED1, LED2, LPM-disable)
-            bis.b   #01h, &P1DIR
-            bis.b   #01h, &P6DIR
+            bis.b   #BIT0, &P1DIR
+            bis.b   #BIT6, &P6DIR
             bic.b   #LOCKLPM5, &PM5CTL0
+            bis.b   #BIT6, &P6OUT
             
 
         ;-Timer B0 Setup
             bis.w   #TBCLR, &TB0CTL
-            bis.w   #TBSSEL__ACLK, &TB0CTL
+            bis.w   #TBSSEL__SMCLK, &TB0CTL
             bis.w   #MC__CONTINUOUS, &TB0CTL
+            bis.w   #ID__4, &TB0CTL
             bis.w   #TBIE, &TB0CTL
             bic.w   #TBIFG, &TB0CTL
             bis.w   #GIE, SR
