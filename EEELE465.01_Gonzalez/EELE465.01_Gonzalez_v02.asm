@@ -42,8 +42,8 @@ init:
             bic.w   #0001h, &PM5CTL0        ; enable GPIO low power mode
             bis.b   #01h, &P1DIR
 main:
-
-            jmp     flashLED1
+            call    #flashLED1
+            jmp     main
 
 
 
@@ -52,8 +52,10 @@ main:
 ; FLASH LED1:
 ;-------------------------------------------------------------------------------
 flashLED1:
-            xor.b  #01h, &P1OUT
-            jmp    delay
+            xor.b   #01h, &P1OUT
+            call    #delay
+
+            ret
 ;----------------- END FLASH LED1 ----------------------------------------------
 
 
@@ -71,11 +73,8 @@ delay_decInnerLoop:
 delay_decOuterLoop:
             dec.w   R5
             jnz     delay_decOuterLoop
-            jz      main
 
-;decOuterLoop:
-;            dec.w   R5
-;            jnz     delay
+            ret
 ;----------------- END DELAY LOOP ----------------------------------------------
 
 ;-------------------------------------------------------------------------------
