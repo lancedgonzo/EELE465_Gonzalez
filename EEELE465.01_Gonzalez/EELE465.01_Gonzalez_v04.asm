@@ -12,6 +12,7 @@
 ;   v02 - Flash LED1 via Subroutine
 ;   v03 - Test LED2 (P6.6)
 ;   v04 - Include ISR for LED2
+;   v05 - Tuned LED1 and LED2 to 0.5Hz
 ;-------------------------------------------------------------------------------
 
 
@@ -69,6 +70,7 @@ main:
 ;-------------------------------------------------------------------------------
 flashLED1:
             xor.b   #BIT0, &P1OUT
+            mov.w   #09h, R5
             call    #delay
 
             ret
@@ -79,8 +81,7 @@ flashLED1:
 ; DELAY LOOP:
 ;-------------------------------------------------------------------------------
 delay: 
-            mov.w   #0FFFFh, R4
-            mov.w   #0FFFFh, R5
+            mov.w   #08FFFh, R4
 
 delay_decInnerLoop:
             dec.w   R4
@@ -88,7 +89,7 @@ delay_decInnerLoop:
 
 delay_decOuterLoop:
             dec.w   R5
-            jnz     delay_decOuterLoop
+            jnz     delay
 
             ret
 ;----------------- END DELAY LOOP ----------------------------------------------
