@@ -8,8 +8,10 @@
 ;
 ;
 ; Version History:
-;   v01 - Test LED1 (OPERATIONAL)
+;   v01 - Test LED1 (P1.0)
 ;   v02 - Flash LED1 via Subroutine
+;   v03 - Test LED2 (P6.6)
+;   v04 - Include ISR for LED2
 ;-------------------------------------------------------------------------------
 
 
@@ -39,8 +41,20 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Stop watchdog timer
 ;-------------------------------------------------------------------------------
 
 init: 
-            bic.w   #0001h, &PM5CTL0        ; enable GPIO low power mode
+        ;-Port Setups (LED1, LED2, LPM-disable)
             bis.b   #01h, &P1DIR
+            bis.b   #01h, &P6DIR
+            bic.b   #LOCKLPM5, &PM5CTL0
+            
+
+        ;-Timer B0 Setup
+            bis.w   #TBCLR, &TB0CTL
+            bis.w   #TBSSEL__ACLK, &TB0CTL
+            bis.w   #MC__CONTINUOUS, &TB0CTL
+            bis.w   #TBIE, &TB0CTL
+            bic.w   #TBIFG, &TB0CTL
+            bis.w   #GIE, SR
+            
 main:
             call    #flashLED1
             jmp     main
@@ -52,7 +66,7 @@ main:
 ; FLASH LED1:
 ;-------------------------------------------------------------------------------
 flashLED1:
-            xor.b   #01h, &P1OUT
+            xor.b   #BIT0, &P1OUT
             call    #delay
 
             ret
@@ -80,7 +94,10 @@ delay_decOuterLoop:
 ;-------------------------------------------------------------------------------
 ; ISR - TIMERB0 OVERFLOW:
 ;-------------------------------------------------------------------------------
-
+ISR_TB0_Overflow:
+            xor.b   #BIT6, &P6OUT
+            bic.w   #TBIFG, &TB0CTL
+            reti
 
 ;----------------- END TIMERB0 OVERFLOW ----------------------------------------
 
@@ -96,4 +113,6 @@ delay_decOuterLoop:
 ;-------------------------------------------------------------------------------
             .sect   ".reset"                ; MSP430 RESET Vector
             .short  RESET
-            
+
+            .sect   ".int42"
+            .short  ISR_TB0_Overflow
