@@ -9,7 +9,7 @@
 ;
 ; Version History:
 ;   v01 - Test LED1 (OPERATIONAL)
-;   v02 - 
+;   v02 - Flash LED1 via Subroutine
 ;-------------------------------------------------------------------------------
 
 
@@ -41,10 +41,9 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Stop watchdog timer
 init: 
             bic.w   #0001h, &PM5CTL0        ; enable GPIO low power mode
             bis.b   #01h, &P1DIR
-            bis.b   #01h, &P1OUT
 main:
 
-            jmp     main
+            jmp     flashLED1
 
 
 
@@ -52,14 +51,27 @@ main:
 ;-------------------------------------------------------------------------------
 ; FLASH LED1:
 ;-------------------------------------------------------------------------------
-
+flashLED1:
+            xor.b  #01h, &P1OUT
+            jmp    delay
 ;----------------- END FLASH LED1 ----------------------------------------------
 
 
 ;-------------------------------------------------------------------------------
 ; DELAY LOOP:
 ;-------------------------------------------------------------------------------
+delay: 
+            mov.w   #0FFFFh, R4
+;            mov.w   #0FFFFh, R5
 
+delay_decInnerLoop:
+            dec.w   R4
+            jnz     delay_decInnerLoop
+            jz      main
+
+;decOuterLoop:
+;            dec.w   R5
+;            jnz     delay
 ;----------------- END DELAY LOOP ----------------------------------------------
 
 ;-------------------------------------------------------------------------------
