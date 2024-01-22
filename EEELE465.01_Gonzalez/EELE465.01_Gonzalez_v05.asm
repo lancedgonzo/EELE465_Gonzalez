@@ -2,7 +2,7 @@
 ; MSP430 Assembler Code Template for use with TI Code Composer Studio
 ; EELE465
 ; Written by: Lance Gonzalez
-; Project 01v01 - Jan 20 2024
+; Project 5 - Jan 21 2024
 ; Heartbeat LED
 ;
 ;
@@ -51,9 +51,11 @@ init:
 
         ;-Timer B0 Setup
             bis.w   #TBCLR, &TB0CTL
-            bis.w   #TBSSEL__SMCLK, &TB0CTL
+            bis.w   #TBSSEL__ACLK, &TB0CTL
             bis.w   #MC__CONTINUOUS, &TB0CTL
-            bis.w   #ID__4, &TB0CTL
+            bis.w   #CNTL_1, &TB0CTL
+            bis.w   #ID__8, &TB0CTL
+            bis.w   #TBIDEX__8, &TB0CTL
             bis.w   #TBIE, &TB0CTL
             bic.w   #TBIFG, &TB0CTL
             bis.w   #GIE, SR
