@@ -5,7 +5,8 @@
 ; Project 5 - Jan 21 2024
 ; Heartbeat LED
 ;
-;
+;   R4 = Inner Loop Value
+;   R5 = Outer Loop Value
 ;
 ; Version History:
 ;   v01 - Test LED1 (P1.0)
@@ -36,42 +37,43 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Stop watchdog timer
 
 ;-------------------------------------------------------------------------------
 
-;~~ MAIN FUNCTION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-;-------------------------------------------------------------------------------
-; Main loop here
-;-------------------------------------------------------------------------------
 
+;~~ INITIALIZATION HERE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 init: 
-        ;-Port Setups (LED1, LED2, LPM-disable)
+    ;-Port Setups 
+        ;^ LED1(P1.0) -> Output, LED2(P6.6) -> Output, LPM-disable
             bis.b   #BIT0, &P1DIR
             bis.b   #BIT6, &P6DIR
-            bic.b   #LOCKLPM5, &PM5CTL0
-            bis.b   #BIT6, &P6OUT
-            
+            bic.b   #LOCKLPM5, &PM5CTL0S
 
-        ;-Timer B0 Setup
+    ;-Timer B0 Setup using overflow Interrupt. 
+        ;^ Configured to ACLK, Coninious, 12 bit,
+        ;^ divide by 16 total,Enable TB0 Overflow Interrupt
             bis.w   #TBCLR, &TB0CTL             
             bis.w   #TBSSEL__ACLK, &TB0CTL          
             bis.w   #MC__CONTINUOUS, &TB0CTL      
-            bis.w   #CNTL_1, &TB0CTL
-            bis.w   #ID__8, &TB0CTL                 ; Divide by 8 
-            bis.w   #TBIDEX__8, &TB0CTL             ; Divide by additonal 8
+            bis.w   #CNTL_1, &TB0CTL                ; 12-bit timer
+            bis.w   #ID__8, &TB0CTL                 
+            bis.w   #TBIDEX__8, &TB0CTL             
             bis.w   #TBIE, &TB0CTL                  ; Local Interrupt enable (TB0)
             bic.w   #TBIFG, &TB0CTL
 
             bis.w   #GIE, SR                        ; Global Maskable Interrupt Enable
 
-main:
+;~~ MAIN FUNCTION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;-------------------------------------------------------------------------------
+; Main loop here
+;-------------------------------------------------------------------------------
+main:   ; Calls flashLED1 and returns. Main is infinite loop. 
             call    #flashLED1
             jmp     main
-
-
 
 ;~~ SUBROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;-------------------------------------------------------------------------------
 ; FLASH LED1:
 ;-------------------------------------------------------------------------------
-flashLED1:
+flashLED1:  
+    ;^ Toggles P1.0, Sets outer loop value of 09h, calls subroutine delay
             xor.b   #BIT0, &P1OUT
             mov.w   #09h, R5
             call    #delay
@@ -79,11 +81,12 @@ flashLED1:
             ret
 ;----------------- END FLASH LED1 ----------------------------------------------
 
-
 ;-------------------------------------------------------------------------------
 ; DELAY LOOP:
 ;-------------------------------------------------------------------------------
 delay: 
+    ;^ Sets 08FFFh as inner loop value, decrement inner loop until 0, outerloop decrements
+    ;^ Inner loop nested in outerloop (repeats every outer loop), when outerloop is zero return
             mov.w   #08FFFh, R4
 
 delay_decInnerLoop:
@@ -101,6 +104,7 @@ delay_decOuterLoop:
 ; ISR - TIMERB0 OVERFLOW:
 ;-------------------------------------------------------------------------------
 ISR_TB0_Overflow:
+    ;^ Toggle P6.6 and clear TB0 interrupt flag, return from interrupt
             xor.b   #BIT6, &P6OUT
             bic.w   #TBIFG, &TB0CTL
             reti
