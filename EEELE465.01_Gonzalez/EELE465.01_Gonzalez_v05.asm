@@ -50,16 +50,17 @@ init:
             
 
         ;-Timer B0 Setup
-            bis.w   #TBCLR, &TB0CTL
-            bis.w   #TBSSEL__ACLK, &TB0CTL
-            bis.w   #MC__CONTINUOUS, &TB0CTL
+            bis.w   #TBCLR, &TB0CTL             
+            bis.w   #TBSSEL__ACLK, &TB0CTL          
+            bis.w   #MC__CONTINUOUS, &TB0CTL      
             bis.w   #CNTL_1, &TB0CTL
-            bis.w   #ID__8, &TB0CTL
-            bis.w   #TBIDEX__8, &TB0CTL
-            bis.w   #TBIE, &TB0CTL
+            bis.w   #ID__8, &TB0CTL                 ; Divide by 8 
+            bis.w   #TBIDEX__8, &TB0CTL             ; Divide by additonal 8
+            bis.w   #TBIE, &TB0CTL                  ; Local Interrupt enable (TB0)
             bic.w   #TBIFG, &TB0CTL
-            bis.w   #GIE, SR
-            
+
+            bis.w   #GIE, SR                        ; Global Maskable Interrupt Enable
+
 main:
             call    #flashLED1
             jmp     main
