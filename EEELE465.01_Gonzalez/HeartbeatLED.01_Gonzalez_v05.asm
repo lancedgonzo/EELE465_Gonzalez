@@ -2,7 +2,7 @@
 ; MSP430 Assembler Code Template for use with TI Code Composer Studio
 ; EELE465
 ; Written by: Lance Gonzalez
-; Project 5 - Jan 21 2024
+; Project 5 - Jan 22 2024
 ; Heartbeat LED
 ;
 ;   R4 = Inner Loop Value
