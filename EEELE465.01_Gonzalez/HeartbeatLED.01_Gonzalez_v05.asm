@@ -44,7 +44,7 @@ init:
         ;^ LED1(P1.0) -> Output, LED2(P6.6) -> Output, LPM-disable
             bis.b   #BIT0, &P1DIR
             bis.b   #BIT6, &P6DIR
-            bic.b   #LOCKLPM5, &PM5CTL0S
+            bic.b   #LOCKLPM5, &PM5CTL0
 
     ;-Timer B0 Setup using overflow Interrupt. 
         ;^ Configured to ACLK, Coninious, 12 bit,
