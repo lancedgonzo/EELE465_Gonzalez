@@ -8,7 +8,7 @@
 ;
 ;
 ; Version History:
-;   v01 -
+;   v01 - 
 ;-------------------------------------------------------------------------------
 
             .cdecls C,LIST,"msp430.h"       ; Include device header file
