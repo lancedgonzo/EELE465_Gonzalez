@@ -75,7 +75,7 @@ main:   ; Calls flashLED1 and returns. Main is infinite loop.
 flashLED1:  
     ;^ Toggles P1.0, Sets outer loop value of 09h, calls subroutine delay
             xor.b   #BIT0, &P1OUT
-            mov.w   #09h, R5
+            mov.w   #014h, R5
             call    #delay
 
             ret
@@ -87,7 +87,7 @@ flashLED1:
 delay: 
     ;^ Sets 08FFFh as inner loop value, decrement inner loop until 0, outerloop decrements
     ;^ Inner loop nested in outerloop (repeats every outer loop), when outerloop is zero return
-            mov.w   #08FFFh, R4
+            mov.w   #0445Ch, R4
 
 delay_decInnerLoop:
             dec.w   R4
