@@ -18,9 +18,11 @@
 ;	P5.2 - SDA
 ;
 ;	Registers:
-;	R4	I2C Transmit Byte
+;	R4	Small Delay loop
 ;	R5	Delay loop count - # of times to run through maximum delay loop
-;
+;	R6	SDA
+;	R7	SCL
+;	R8
 ;-------------------------------------------------------------------------------
             .cdecls C,LIST,"msp430.h"       ; Include device header file
             
@@ -47,30 +49,20 @@ Init:
 	bic.b	#BIT0, &P1SEL0	; Setting pin as digital I/O
 	bic.b	#BIT0, &P1SEL1
 	bis.b	#BIT0, &P1DIR	; Initializing pin as output
-	bic.b	#BIT0, &P1OUT	; Initializing LED2 as off
+	bis.b	#BIT0, &P1OUT	; Initializing LED1 as on
 
     ; Configuring LED2 - P6.6
 	bic.b	#BIT6, &P6SEL0	; Setting pin as digital I/O
 	bic.b	#BIT6, &P6SEL1
 	bis.b	#BIT6, &P6DIR	; Initializing pin as output
-	bic.b	#BIT6, &P6OUT	; Initializing LED2 as off
+	bis.b	#BIT6, &P6OUT	; Initializing LED2 as on
 
 	mov.w	#0, R4			; Initialize R4 to 0
 	mov.w	#0, R5			; Initialize R5 to 0
+	mov.w	#0, R6			; Initialize R6 to 0
+	mov.w	#0, R7			; Initialize R7 to 0
+	mov.w	#0, R8			; Initialize R8 to 0
 
-	; Configuring Timer B0 - 1.05 (measured 1.00) s = 1E-6 * 8 * 5 * 26250
-	bis.w	#TBCLR, &TB0CTL			; Clear timers & dividers
-	bis.w	#TBSSEL__SMCLK, &TB0CTL	; Set SMCLK as the source
-	bis.w	#MC__UP, &TB0CTL		; Set mode as up
-	bis.w	#ID__8, &TB0CTL			; Set divider to 8
-	bis.w	#TBIDEX__5, &TB0EX0		; Set Expansion register divider to 5
-	bis.w	#CNTL_0, &TB0CTL		; 16-bit counter length
-	mov.w	#26255, &TB0CCR0		; Setting Capture Compare Register 0
-	bic.w	#CCIFG, &TB0CCTL0		; Clear interrupt flag - Capture/Compare
-	bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
-
-	nop
-	bis.w	#GIE, SR				; Enable maskable interrupts
 	nop
 	bic.b	#LOCKLPM5, &PM5CTL0		; Disable High-z
 
@@ -81,76 +73,74 @@ Init:
 ; Main: main subroutine
 ;-------------------------------------------------------------------------------
 Main:
-	call 	#I2CStartTransmit
-	bis.b	#BIT0, &P1OUT	; Initializing LED2 as on
-	bis.b	#BIT6, &P6OUT	; Initializing LED2 as on
-	mov.w	#00008h, R5
-	call 	#Delay
+	call 	#I2CStart
+	call	#I2CTx
+
 	jmp		Main
 ;--------------------------------- end of main ---------------------------------
 
 ;-------------------------------------------------------------------------------
+; I2CStart:
+;-------------------------------------------------------------------------------
+I2CStart:
+	mov.b	#000D6h, R6		; 1101 0110b reversed from 0xEB Start bit + address 6B
+	mov.b	#00055h, R7		; 01010101	Alternating clock. not quite correct for final thing
+	mov.b	#00008h, R8		; full byte being sent
+
+	ret
+	nop
+;------------------------------- end of I2CStart -------------------------------
+
+
+;-------------------------------------------------------------------------------
+; I2CTx:
+;-------------------------------------------------------------------------------
+I2CTx:
+	rra.w	R6				; If clock to be sent was 1, set LED to high, otherwise set LED to low then go to SDA
+	jc		SCL1
+SCL0:
+	bic.b	#BIT6, &P6OUT
+	jmp		SDAOutput
+SCL1:
+	bis.b	#BIT6, &P6OUT
+
+SDAOutput:
+	rra.w	R7
+	jc	SDA1				; If data to be sent was 1, set LED to high, otherwise set LED to low then go to delay
+SDA0:
+	bic.b	#BIT0, &P1OUT
+	jmp		TransmitDelay
+SDA1:
+	bis.b	#BIT0, &P1OUT
+
+TransmitDelay:
+	call	#LargeDelay
+
+	dec.b	R8				; Loop until byte is sent
+	jnz		I2CTx
+
+	ret
+	nop
+;--------------------------------- end of I2CTx --------------------------------
+
+;-------------------------------------------------------------------------------
 ; Delay: delay for
 ;-------------------------------------------------------------------------------
-Delay:
-	mov.w	#0AAEFh, R4				; Tuned for 1s Delay with 8 loops
+LargeDelay:
+	mov.b	#00003h, R5
 SmallDelay:
+	mov.w	#0AAEFh, R4				; Tuned for 1s Delay with 8 loops
+SmallDelayLoop:
 	dec.w	R4						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
-	jnz		SmallDelay
+	jnz		SmallDelayLoop
 
 	dec.w	R5
-	jnz		Delay
+	jnz		SmallDelay
 
 	ret
 	nop
 
 ;--------------------------------- end of delay --------------------------------
-
-;-------------------------------------------------------------------------------
-; Main: main subroutine
-;-------------------------------------------------------------------------------
-Main:
-	mov.w	#00008h, R5
-	call 	#Delay
-	call 	#FlashRed
-	jmp		Main
-;--------------------------------- end of main ---------------------------------
-
-;-------------------------------------------------------------------------------
-; I2CStartTransmit:
-;-------------------------------------------------------------------------------
-I2CStartTransmit:
-StartCondition:
-	bis.b	#BIT0, &P1OUT	; Initializing LED1 as on
-	bic.b	#BIT6, &P6OUT	; Initializing LED2 as off
-
-	mov.w	#00002h, R5
-	call 	#Delay
-
-	bic.b	#BIT0, &P1OUT	; Initializing LED1 as off
-	bic.b	#BIT6, &P6OUT	; Initializing LED2 as off
-
-	mov.w	#00002h, R5
-	call 	#Delay
-
-;--------------------------- end of I2CStartTransmit ---------------------------
-
-
-;-------------------------------------------------------------------------------
-; FlashRed: toggle led1
-;-------------------------------------------------------------------------------
-FlashRed:
-	xor.b	#01h, P1OUT		; toggle LED1 then return
-	ret
-	nop
-;------------------------------- end of FlashRed -------------------------------
-
-;-----------------------START TimerB0_250ms-------------------------------------
-TimerB0_250ms:
-	xor.b	#BIT6, &P6OUT			; toggle LED1
-	bic.w	#CCIFG, &TB0CCTL0		; Clear interrupt flag - Capture/Compare
-	reti
-;-----------------------END TimerB0_250ms---------------------------------------
 
 
 ;-------------------------------------------------------------------------------
@@ -164,8 +154,3 @@ TimerB0_250ms:
 ;-------------------------------------------------------------------------------
             .sect   ".reset"                ; MSP430 RESET Vector
             .short  RESET
-            
-            .sect	".int43"				; TB0CCR0
-            .short	TimerB0_250ms
-
-
