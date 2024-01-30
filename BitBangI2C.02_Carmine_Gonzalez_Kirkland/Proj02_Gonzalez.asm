@@ -10,8 +10,8 @@
 ;       P5.2 - I2C SCL 
 ;
 ;   Registers:
-;       R4: I2C transmit byte
-;
+;       R4: Delay Loop 1
+;       R5: Delay loop 2
 ;
 ; Version History:
 ;   v01 - Created timer compart interrupt for SCL PWM
@@ -39,7 +39,7 @@ init:
     ;^ Handles port, register, and other initialization
 
     ; Port Setup
-        bis.b   #BIT6, &P3DIR               ; P1.0 -> output
+        bis.b   #BIT6, &P3DIR               ; P3.6 -> output
         bic.b   #BIT6, &P3OUT
         bic.b   #LOCKLPM5, &PM5CTL0         ; disable low power mode 
 
@@ -49,16 +49,14 @@ init:
         bis.w   #MC__UP, &TB0CTL            ; UP
 
     ; Timer Compare Reg
-        mov.w   #048h, &TB0CCR0           ; 72d -> 7.1428e-5 s
-        mov.w   #01Eh, &TB0CCR1            ; 30d -> 3e-5 s 
+        mov.w   #048h, &TB0CCR0          	; 72d -> 7.1428e-5 s
+        mov.w   #01Eh, &TB0CCR1            	; 30d -> 3e-5 s
 
-        ;Interrupt enable + flag clear
-        bis.w   #CCIE, &TB0CCTL0
-        bic.w   #CCIFG, &TB0CCTL0
+        ;CCR0 flag clear
+        ;bic.w   #CCIFG, &TB0CCTL0
         
-        ;Interrupt enable + flag clear
-        bis.w   #CCIE, &TB0CCTL1
-        bic.w   #CCIFG, &TB0CCTL1
+        ;CCR1 flag clear
+        ;bic.w   #CCIFG, &TB0CCTL1
 
         bis.w   #GIE, SR                    ; Enable maskable
 
@@ -68,19 +66,43 @@ init:
 ; Main loop here
 ;-------------------------------------------------------------------------------
 main:   
-    ;^ Infinite Loop
+    ;^ Starts Clock Ends Clock in cyclic manner with delay loop
+        call    I2C_SCL_ON                      ; Starts PWM 
+        call    delay                           ; waits set amount of time
+        call    I2C_SCL_OFF                     ; Stops PWM
+        call 	delay
         jmp     main
 
 
 ;~~ SUBROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;-------------------------------------------------------------------------------
+; I2C_SCL_ON:
+;-------------------------------------------------------------------------------
+I2C_SCL_ON: 
+        bis.w   #CCIE, &TB0CCTL0
+        bic.w 	#CCIFG, &TB0CCTL0
+
+        bis.w   #CCIE, &TB0CCTL1
+        bic.w 	#CCIFG, &TB0CCTL1
+        ret
+;----------------- END I2C_SCL_ON LOOP -----------------------------------------
+
+;-------------------------------------------------------------------------------
+; I2C_SCL_OFF:
+;-------------------------------------------------------------------------------
+I2C_SCL_OFF: 
+        bic.w   #CCIE, &TB0CCTL0
+        bic.w   #CCIE, &TB0CCTL1
+        ret
+;----------------- END I2C_SCL_OFF LOOP -----------------------------------------
+
+;-------------------------------------------------------------------------------
 ; DELAY LOOP:
 ;-------------------------------------------------------------------------------
 delay: 
-    ;^ Sets 08FFFh as inner loop value, decrement inner loop until 0, outerloop decrements
-    ;^ Inner loop nested in outerloop (repeats every outer loop), when outerloop is zero return
-            mov.w   #0445Ch, R4
-            mov.w   #08h, R5
+    ;^ Sets inner loop at 100ms and outer loop at total 100ms increments for total time
+            mov.w   #0FFFFh, R4
+            mov.w   #0FFFFh, R5
 
 delay_decInnerLoop:
             dec.w   R4
