@@ -67,10 +67,10 @@ init:
 ;-------------------------------------------------------------------------------
 main:   
     ;^ Starts Clock Ends Clock in cyclic manner with delay loop
-        call    I2C_SCL_ON                      ; Starts PWM 
-        call    delay                           ; waits set amount of time
-        call    I2C_SCL_OFF                     ; Stops PWM
-        call 	delay
+        call    #I2C_SCL_ON                      ; Starts PWM
+        call    #delay                           ; waits set amount of time
+        call    #I2C_SCL_OFF                     ; Stops PWM
+        call 	#delay
         jmp     main
 
 
