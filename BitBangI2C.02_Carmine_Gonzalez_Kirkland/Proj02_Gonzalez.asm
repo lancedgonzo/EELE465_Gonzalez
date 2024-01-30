@@ -45,11 +45,11 @@ init:
     ; Timer Setup
         bis.w   #TBCLR, &TB0CTL             ; Clear TB0
         bis.w   #TBSSEL__SMCLK, &TB0CTL     ; SMCLK
-        bis.w   #MC__UP, &TB0CTL             ; UP
+        bis.w   #MC__UP, &TB0CTL            ; UP
 
     ; Timer Compare Reg
-        mov.w   #01BE7h, &TB0CCR0           ; 7143d -> 7.1428e-5 s
-        mov.w   #0BB8h, &TB0CCR1            ; 3000d -> 3e-5 s 
+        mov.w   #048h, &TB0CCR0           ; 72d -> 7.1428e-5 s
+        mov.w   #01Eh, &TB0CCR1            ; 30d -> 3e-5 s 
 
         ;Interrupt enable + flag clear
         bis.w   #CCIE, &TB0CCTL0
@@ -78,7 +78,6 @@ ISR_TB0_CCR1:
     ;^ PWM at 14 kHz, duty = 42%
         bic.b   #BIT0, &P1OUT
         bic.w   #CCIFG, &TB0CCTL1
-
         reti
 ;----------------- END TIMERB0_CCR1 -------------------------------------------
 
@@ -89,7 +88,6 @@ ISR_TB0_CCR0:
     ;^ PWM at 14 kHz, duty = 42%
         bis.b   #BIT0, &P1OUT
         bic.w   #CCIFG, &TB0CCTL0
-
         reti
 ;----------------- END TIMERB0_CCR0 -------------------------------------------
 
