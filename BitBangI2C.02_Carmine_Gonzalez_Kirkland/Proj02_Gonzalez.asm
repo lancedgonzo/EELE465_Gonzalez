@@ -68,16 +68,30 @@ init:
 ;-------------------------------------------------------------------------------
 main:   
     ;^ Infinite Loop
-            jmp     main
+        jmp     main
 
 ;~~ INTERRUPT SERVICE ROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;-------------------------------------------------------------------------------
-; ISR - TIMERB0_CLOCK_PWM:
+; ISR - TIMERB0_CCR1: Sets P1.0 output to low
 ;-------------------------------------------------------------------------------
-ISR_TB0_ClockPWM:
+ISR_TB0_CCR1:
     ;^ PWM at 14 kHz, duty = 42%
-            reti
-;----------------- END TIMERB0_CLOCK_PWM ---------------------------------------
+        bic.b   #BIT0, &P1OUT
+        bic.w   #CCIFG, &TB0CCTL1
+
+        reti
+;----------------- END TIMERB0_CCR1 -------------------------------------------
+
+;-------------------------------------------------------------------------------
+; ISR - TIMERB0_CCR0: Sets P1.0 output to HIGH
+;-------------------------------------------------------------------------------
+ISR_TB0_CCR0:
+    ;^ PWM at 14 kHz, duty = 42%
+        bic.b   #BIT0, &P1OUT
+        bic.w   #CCIFG, &TB0CCTL0
+
+        reti
+;----------------- END TIMERB0_CCR0 -------------------------------------------
 
 ;-------------------------------------------------------------------------------
 ; Stack Pointer definition
@@ -90,4 +104,10 @@ ISR_TB0_ClockPWM:
 ;-------------------------------------------------------------------------------
             .sect   ".reset"                ; MSP430 RESET Vector
             .short  RESET
+
+            .sect   ".int43"                ; ISR Vector Def for CCR0
+            .short  ISR_TB0_CCR0
+
+            .sect   ".int42"                ; ISR Vector Def for CCR1
+            .short  ISR_TB0_CCR1
             
