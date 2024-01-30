@@ -1,28 +1,30 @@
 ;-------------------------------------------------------------------------------
 ; MSP430 Assembler Code Template for use with TI Code Composer Studio
 ; 	EELE465
-;	Written by: Lance Gonzalez
+;	Written by: Zach Carmean, Lance Gonzalez, Grant Kirkland
 ;	Project 02 - Jan 25 2024
 ;
 ;	Summary:
 ;	Project blinks two LEDs using both delays and interrupts
 ;
 ;	Version Summary:
-;
-;
-;	Interrupts:
-;	Timer B0 - Set for 1s
+;	Changed registers to agreed upon values.
 ;
 ;	Ports:
 ;	P3.6 - SCL
 ;	P5.2 - SDA
 ;
 ;	Registers:
-;	R4	Small Delay loop
-;	R5	Delay loop count - # of times to run through maximum delay loop
-;	R6	SDA
-;	R7	SCL
-;	R8
+;	R4	SDA
+;	R5	Clock Delay Loop
+;	R6	Remaining transmit bits
+;
+;	Todo:
+;		Acknowledge: pretty much everything. acknowledge is just wait a clock cycle currently.
+;		Fix clock timing to be standard i2c frequency
+;		Test data delay with clock. Might be able to do with analog discovery. Not sure if delay is long enough.
+;		Flowchart
+;		Update to ports 3.6 / 5.2
 ;-------------------------------------------------------------------------------
             .cdecls C,LIST,"msp430.h"       ; Include device header file
             
@@ -57,11 +59,10 @@ Init:
 	bis.b	#BIT6, &P6DIR	; Initializing pin as output
 	bis.b	#BIT6, &P6OUT	; Initializing LED2 as on
 
-	mov.w	#0, R4			; Initialize R4 to 0
-	mov.w	#0, R5			; Initialize R5 to 0
-	mov.w	#0, R6			; Initialize R6 to 0
-	mov.w	#0, R7			; Initialize R7 to 0
-	mov.w	#0, R8			; Initialize R8 to 0
+	; Initialize Used Registers
+	mov.w	#0, R4
+	mov.w	#0, R5
+	mov.w	#0, R6
 
 	nop
 	bic.b	#LOCKLPM5, &PM5CTL0		; Disable High-z
@@ -73,9 +74,18 @@ Init:
 ; Main: main subroutine
 ;-------------------------------------------------------------------------------
 Main:
-	call 	#I2CStart
+	call 	#I2CStart		; I2C Start Condition / load address into memory
+	call	#I2CTx			; I2C Transmit loaded bit
+	call	#I2CAck			; I2C Wait for acknowledge
+
+	mov.b	#0055h, R4
+	swpb	R4
+	mov.b	#00008h, R6		; full byte being sent
 	call	#I2CTx
-	call	#I2CStop
+	call	#I2CAck
+
+	call	#I2CStop		; I2C Stop Condition
+	call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
 	call	#I2CReset
 	jmp		Main
 ;--------------------------------- end of main ---------------------------------
@@ -86,103 +96,99 @@ Main:
 I2CStart:
 	bic.b	#BIT6, &P6OUT	; SDA Low
 
-	mov.b	#0006Bh, R6		; 1101 0110b reversed from 0xEB Start bit + address 6B
-	rla.w	R6				; one less byte being sent due to start condition
+	mov.b	#0006Bh, R4		; 1101 0110b reversed from 0xEB Start bit + address 6B
+	rla.w	R4				; one less byte being sent due to start condition
+	bis.b	#BIT0, R4		; Set readwrite bit
 	; todo add read write bit
 
-	swpb	R6
-;	mov.b	#00055h, R7		; 01010101	Alternating clock. not quite correct for final thing
-	mov.b	#00008h, R8		; full byte being sent
+	swpb	R4
+	mov.b	#00008h, R6		; full byte being sent
 
-	call	#I2CDelay
+	call	#I2CClockDelay
 	ret
 	nop
 ;------------------------------- end of I2CStart -------------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CStop:
-;-------------------------------------------------------------------------------
-I2CStop:
-	bic.b	#BIT0, &P1OUT	; SCL Low
-	call	#DataDelay		; data delay
-	bic.b	#BIT6, &P6OUT	; SDA Low
-	call	#I2CDelay
-	bis.b	#BIT0, &P1OUT	; SCL High
-	call	#DataDelay		; data delay
-	bis.b	#BIT6, &P6OUT	; SDA Low
-	call	#I2CDelay
-	ret
-	nop
-;------------------------------- end of I2CStart -------------------------------
-
-
-;-------------------------------------------------------------------------------
-; I2CTx:
+; I2CTx: Transmit data stored in R4.
 ;-------------------------------------------------------------------------------
 I2CTx:
 
 	bic.b	#BIT0, &P1OUT	; Clock to low
 
-	call	#DataDelay		; data delay
-	;call	#NopDelay		; data delay
+	call	#DataDelay		; Delay for data
 
-	rla.w	R6				; SDA rotate transmitted bit into carry
+	rla.w	R4				; SDA rotate transmitted bit into carry
 	jc		SDA1			; output bit
 
 SDA0:
 	bic.b	#BIT6, &P6OUT
-	jmp		TransmitDelay
+	jmp		TransmitClockCycle
 
 SDA1:
 	bis.b	#BIT6, &P6OUT
 
-TransmitDelay:
-	call	#I2CDelay
-	bis.b	#BIT0, &P1OUT	; Clock to high
-	call	#I2CDelay
+TransmitClockCycle:
+	call	#I2CClockDelay	; Wait half clock period, before setting clock to high and waiting again.
+	bis.b	#BIT0, &P1OUT
+	call	#I2CClockDelay
 
 
-	dec.b	R8				; Loop until byte is sent
+	dec.b	R6				; Loop until byte is sent
 	jnz		I2CTx
 
 	ret
 	nop
 ;--------------------------------- end of I2CTx --------------------------------
 
+;-------------------------------------------------------------------------------
+; I2CAck:
+;-------------------------------------------------------------------------------
+I2CAck:
+	bic.b	#BIT0, &P1OUT	; Clock to high
+	call	#I2CClockDelay
+	bis.b	#BIT0, &P1OUT	; Clock to high
+	call	#I2CClockDelay
+	ret
+	nop
+;-------------------------------- end of I2CAck --------------------------------
+
+;-------------------------------------------------------------------------------
+; I2CStop: Transmit stop condition for I2C
+;-------------------------------------------------------------------------------
+I2CStop:
+	bic.b	#BIT0, &P1OUT	; SCL Low
+	call	#DataDelay		; data delay
+	bic.b	#BIT6, &P6OUT	; SDA Low
+	call	#I2CClockDelay
+	bis.b	#BIT0, &P1OUT	; SCL High
+	call	#DataDelay		; data delay
+	bis.b	#BIT6, &P6OUT	; SDA Low
+	call	#I2CClockDelay
+	ret
+	nop
+;------------------------------- end of I2CStart -------------------------------
+
+;-------------------------------------------------------------------------------
+; I2CReset: Holds both lines high for a clock cycle for debugging
+;-------------------------------------------------------------------------------
 I2CReset:
 	bis.b	#BIT0, &P1OUT
 	bis.b	#BIT6, &P6OUT
-	call	#I2CDelay
-	call	#I2CDelay
+	call	#I2CClockDelay
+	call	#I2CClockDelay
 	ret
 	nop
+;--------------------------------- end of I2CTx --------------------------------
 
 ;-------------------------------------------------------------------------------
-; NopDelay:
+; I2CClockDelay: delay for clock pulses - not tuned todo
 ;-------------------------------------------------------------------------------
-NopDelay:
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	ret
-	nop
-;------------------------------- end of NopDelay -------------------------------
-
-;-------------------------------------------------------------------------------
-; Delay: delay for
-;-------------------------------------------------------------------------------
-I2CDelay:
-	mov.w	#003EFh, R4				; Tuned for 1s Delay with 8 loops
-SmallDelayLoop:
-	dec.w	R4						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
-	jnz		SmallDelayLoop
+I2CClockDelay:
+	mov.w	#003EFh, R5				; Tuned for 1s Delay with 8 loops
+ClockDelayLoop:
+	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
+	jnz		ClockDelayLoop
 
 	ret
 	nop
@@ -190,13 +196,17 @@ SmallDelayLoop:
 ;--------------------------------- end of delay --------------------------------
 
 ;-------------------------------------------------------------------------------
-; Delay: delay for
+; DataDelay: Very small delay for data
 ;-------------------------------------------------------------------------------
 DataDelay:
-	mov.w	#00009h, R4				; Tuned for 1s Delay with 8 loops
-	jmp		SmallDelayLoop
 	nop
-
+	nop
+	nop
+	nop
+	nop
+	nop
+	ret
+	nop
 ;--------------------------------- end of delay --------------------------------
 
 
