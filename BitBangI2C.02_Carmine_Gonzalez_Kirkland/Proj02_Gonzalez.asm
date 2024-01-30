@@ -15,6 +15,7 @@
 ;
 ; Version History:
 ;   v01 - Created timer compart interrupt for SCL PWM
+;   v02 - Enables and Disables Clock PWM in cycle
 ;-------------------------------------------------------------------------------
 
             .cdecls C,LIST,"msp430.h"       ; Include device header file
@@ -38,8 +39,8 @@ init:
     ;^ Handles port, register, and other initialization
 
     ; Port Setup
-        bis.b   #BIT0, &P1DIR               ; P1.0 -> output
-        bic.b   #BIT0, &P1OUT
+        bis.b   #BIT6, &P3DIR               ; P1.0 -> output
+        bic.b   #BIT6, &P3OUT
         bic.b   #LOCKLPM5, &PM5CTL0         ; disable low power mode 
 
     ; Timer Setup
@@ -70,13 +71,34 @@ main:
     ;^ Infinite Loop
         jmp     main
 
+
+;~~ SUBROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;-------------------------------------------------------------------------------
+; DELAY LOOP:
+;-------------------------------------------------------------------------------
+delay: 
+    ;^ Sets 08FFFh as inner loop value, decrement inner loop until 0, outerloop decrements
+    ;^ Inner loop nested in outerloop (repeats every outer loop), when outerloop is zero return
+            mov.w   #0445Ch, R4
+            mov.w   #08h, R5
+
+delay_decInnerLoop:
+            dec.w   R4
+            jnz     delay_decInnerLoop
+
+            dec.w   R5
+            jnz     delay
+
+            ret
+;----------------- END DELAY LOOP ----------------------------------------------
+
 ;~~ INTERRUPT SERVICE ROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;-------------------------------------------------------------------------------
 ; ISR - TIMERB0_CCR1: Sets P1.0 output to low
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR1:
     ;^ PWM at 14 kHz, duty = 42%
-        bic.b   #BIT0, &P1OUT
+        bic.b   #BIT6, &P3OUT
         bic.w   #CCIFG, &TB0CCTL1
         reti
 ;----------------- END TIMERB0_CCR1 -------------------------------------------
@@ -86,7 +108,7 @@ ISR_TB0_CCR1:
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR0:
     ;^ PWM at 14 kHz, duty = 42%
-        bis.b   #BIT0, &P1OUT
+        bis.b   #BIT6, &P3OUT
         bic.w   #CCIFG, &TB0CCTL0
         reti
 ;----------------- END TIMERB0_CCR0 -------------------------------------------
