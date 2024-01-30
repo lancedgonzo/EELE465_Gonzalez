@@ -66,11 +66,12 @@ init:
 ; Main loop here
 ;-------------------------------------------------------------------------------
 main:   
-    ;^ Starts Clock Ends Clock in cyclic manner with delay loop
-        call    #I2C_SCL_ON                      ; Starts PWM
-        call    #delay                           ; waits set amount of time
-        call    #I2C_SCL_OFF                     ; Stops PWM
-        call 	#delay
+    ; ;^ Starts Clock Ends Clock in cyclic manner with delay loop
+    ;     call    #I2C_SCL_ON                      ; Starts PWM
+    ;     call    #delay                           ; waits set amount of time
+    ;     call    #I2C_SCL_OFF                     ; Stops PWM
+    ;     call 	#delay
+
         jmp     main
 
 
@@ -96,6 +97,30 @@ I2C_SCL_OFF:
         ret
 ;----------------- END I2C_SCL_OFF LOOP -----------------------------------------
 
+;-------------------------------------------------------------------------------
+; I2CAckRequest:
+;-------------------------------------------------------------------------------
+I2CAckRequest: 
+    ;INIT P5.2 as input with pull up 
+        bic.b   #BIT2, &P5DIR
+        bis.b   #BIT2, &P5REN
+        bis.b   #BIT2, &P5OUT
+
+        call    ; Call I2C stability delay
+        call    ; Call polling loop for Ack
+
+        ret
+;----------------- END I2CAckReques Subroutine----------------------------------
+
+;-------------------------------------------------------------------------------
+; Poll_Ack:
+;-------------------------------------------------------------------------------
+Poll_Ack: 
+        bit.b   #BIT2, &P5IN            ; Test P5.2 for Ack (High)
+        jz      Poll_Ack                ; Until Data line is high keep polling
+
+        ret
+;----------------- END Poll_Ack Subroutine--------------------------------------
 ;-------------------------------------------------------------------------------
 ; DELAY LOOP:
 ;-------------------------------------------------------------------------------
