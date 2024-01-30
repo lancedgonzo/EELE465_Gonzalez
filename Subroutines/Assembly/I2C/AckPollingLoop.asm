@@ -6,6 +6,7 @@
 ; 
 ; Important Notes:      There is an includded call for an I2C stability Delay which is 
 ;                       currently not included. 
+;-------------------------------------------------------------------------------
 
 ;-------------------------------------------------------------------------------
 ; I2CAckRequest:
