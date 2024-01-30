@@ -2,7 +2,7 @@
 ; MSP430 Assembler Code Template for use with TI Code Composer Studio
 ; EELE465
 ; Written by: Lance Gonzalez
-; Project 02 - Jan 25 2024
+; Project 02 - Jan 29 2024
 ; Bit Banging I2C 
 ;
 ;   Ports:
@@ -45,7 +45,7 @@ init:
     ; Timer Setup
         bis.w   #TBCLR, &TB0CTL             ; Clear TB0
         bis.w   #TBSSEL__SMCLK, &TB0CTL     ; SMCLK
-        bis.w   #MC_UP, &TB0CTL             ; UP 
+        bis.w   #MC__UP, &TB0CTL             ; UP
 
     ; Timer Compare Reg
         mov.w   #01BE7h, &TB0CCR0           ; 7143d -> 7.1428e-5 s
@@ -87,7 +87,7 @@ ISR_TB0_CCR1:
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR0:
     ;^ PWM at 14 kHz, duty = 42%
-        bic.b   #BIT0, &P1OUT
+        bis.b   #BIT0, &P1OUT
         bic.w   #CCIFG, &TB0CCTL0
 
         reti
