@@ -75,7 +75,8 @@ Init:
 Main:
 	call 	#I2CStart
 	call	#I2CTx
-
+	call	#I2CStop
+	call	#I2CReset
 	jmp		Main
 ;--------------------------------- end of main ---------------------------------
 
@@ -83,10 +84,33 @@ Main:
 ; I2CStart:
 ;-------------------------------------------------------------------------------
 I2CStart:
-	mov.b	#000D6h, R6		; 1101 0110b reversed from 0xEB Start bit + address 6B
-	mov.b	#00055h, R7		; 01010101	Alternating clock. not quite correct for final thing
+	bic.b	#BIT6, &P6OUT	; SDA Low
+
+	mov.b	#0006Bh, R6		; 1101 0110b reversed from 0xEB Start bit + address 6B
+	rla.w	R6				; one less byte being sent due to start condition
+	; todo add read write bit
+
+	swpb	R6
+;	mov.b	#00055h, R7		; 01010101	Alternating clock. not quite correct for final thing
 	mov.b	#00008h, R8		; full byte being sent
 
+	call	#I2CDelay
+	ret
+	nop
+;------------------------------- end of I2CStart -------------------------------
+
+;-------------------------------------------------------------------------------
+; I2CStop:
+;-------------------------------------------------------------------------------
+I2CStop:
+	bic.b	#BIT0, &P1OUT	; SCL Low
+	call	#DataDelay		; data delay
+	bic.b	#BIT6, &P6OUT	; SDA Low
+	call	#I2CDelay
+	bis.b	#BIT0, &P1OUT	; SCL High
+	call	#DataDelay		; data delay
+	bis.b	#BIT6, &P6OUT	; SDA Low
+	call	#I2CDelay
 	ret
 	nop
 ;------------------------------- end of I2CStart -------------------------------
@@ -96,25 +120,27 @@ I2CStart:
 ; I2CTx:
 ;-------------------------------------------------------------------------------
 I2CTx:
-	rra.w	R6				; If clock to be sent was 1, set LED to high, otherwise set LED to low then go to SDA
-	jc		SCL1
-SCL0:
+
+	bic.b	#BIT0, &P1OUT	; Clock to low
+
+	call	#DataDelay		; data delay
+	;call	#NopDelay		; data delay
+
+	rla.w	R6				; SDA rotate transmitted bit into carry
+	jc		SDA1			; output bit
+
+SDA0:
 	bic.b	#BIT6, &P6OUT
-	jmp		SDAOutput
-SCL1:
+	jmp		TransmitDelay
+
+SDA1:
 	bis.b	#BIT6, &P6OUT
 
-SDAOutput:
-	rra.w	R7
-	jc	SDA1				; If data to be sent was 1, set LED to high, otherwise set LED to low then go to delay
-SDA0:
-	bic.b	#BIT0, &P1OUT
-	jmp		TransmitDelay
-SDA1:
-	bis.b	#BIT0, &P1OUT
-
 TransmitDelay:
-	call	#LargeDelay
+	call	#I2CDelay
+	bis.b	#BIT0, &P1OUT	; Clock to high
+	call	#I2CDelay
+
 
 	dec.b	R8				; Loop until byte is sent
 	jnz		I2CTx
@@ -123,21 +149,52 @@ TransmitDelay:
 	nop
 ;--------------------------------- end of I2CTx --------------------------------
 
+I2CReset:
+	bis.b	#BIT0, &P1OUT
+	bis.b	#BIT6, &P6OUT
+	call	#I2CDelay
+	call	#I2CDelay
+	ret
+	nop
+
+;-------------------------------------------------------------------------------
+; NopDelay:
+;-------------------------------------------------------------------------------
+NopDelay:
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	ret
+	nop
+;------------------------------- end of NopDelay -------------------------------
+
 ;-------------------------------------------------------------------------------
 ; Delay: delay for
 ;-------------------------------------------------------------------------------
-LargeDelay:
-	mov.b	#00003h, R5
-SmallDelay:
-	mov.w	#0AAEFh, R4				; Tuned for 1s Delay with 8 loops
+I2CDelay:
+	mov.w	#003EFh, R4				; Tuned for 1s Delay with 8 loops
 SmallDelayLoop:
 	dec.w	R4						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		SmallDelayLoop
 
-	dec.w	R5
-	jnz		SmallDelay
-
 	ret
+	nop
+
+;--------------------------------- end of delay --------------------------------
+
+;-------------------------------------------------------------------------------
+; Delay: delay for
+;-------------------------------------------------------------------------------
+DataDelay:
+	mov.w	#00009h, R4				; Tuned for 1s Delay with 8 loops
+	jmp		SmallDelayLoop
 	nop
 
 ;--------------------------------- end of delay --------------------------------
