@@ -2,22 +2,25 @@
 ; MSP430 Assembler Code Template for use with TI Code Composer Studio
 ; 	EELE465
 ;	Written by: Zach Carmean, Lance Gonzalez, Grant Kirkland
-;	Project 02 - Jan 25 2024
+;   Working: Lance Gonzalez
+;	Project 02 - Feb 2 2024
 ;
 ;	Summary:
-;	Project blinks two LEDs using both delays and interrupts
+;	    
 ;
 ;	Version Summary:
-;	Changed registers to agreed upon values.
+;   v01: 
+;   v02:
+;	v03: Transmits byte of data with ack, sends another address
 ;
 ;	Ports:
-;	P3.6 - SCL
-;	P5.2 - SDA
+;	    P3.6 - SCL
+;	    P5.2 - SDA
 ;
 ;	Registers:
-;	R4	SDA
-;	R5	Clock Delay Loop
-;	R6	Remaining transmit bits
+;	    R4	SDA
+;	    R5	Clock Delay Loop
+;	    R6	Remaining transmit bits
 ;
 ;	Todo:
 ;		Acknowledge: pretty much everything. acknowledge is just wait a clock cycle currently.
@@ -76,14 +79,14 @@ Init:
 Main:
 	call 	#I2CStart			; I2C Start Condition / load address into memory
 	call	#I2CTx				; I2C Transmit loaded bit
-	call	#I2CAck		; I2C Wait for acknowledge
+	call	#I2CAckRequest		; I2C Wait for acknowledge
 
 	mov.b	#0055h, R4
 	swp.b	R4
 	mov.b	#00008h, R6		; full byte being sent
 
 	call	#I2CTx
-	call	#I2CAck
+	call	#I2CAckRequest
 
 	call	#I2CStop		; I2C Stop Condition
 	call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
@@ -142,18 +145,53 @@ TransmitClockCycle:
 	nop
 ;--------------------------------- end of I2CTx --------------------------------
 
-;-------------------------------------------------------------------------------
+; ;-------------------------------------------------------------------------------
+; ; I2CAck:
+; ;-------------------------------------------------------------------------------
 ; I2CAck:
+; 	bic.b	#BIT0, &P1OUT	; Clock to high
+; 	call	#I2CClockDelay
+; 	bis.b	#BIT0, &P1OUT	; Clock to high
+; 	call	#I2CClockDelay
+; 	ret
+; 	nop
+; ;-------------------------------- end of I2CAck --------------------------------
 ;-------------------------------------------------------------------------------
-I2CAck:
-	bic.b	#BIT0, &P1OUT	; Clock to high
-	call	#I2CClockDelay
-	bis.b	#BIT0, &P1OUT	; Clock to high
-	call	#I2CClockDelay
-	ret
-	nop
-;-------------------------------- end of I2CAck --------------------------------
+; I2CAckRequest:
+;-------------------------------------------------------------------------------
+I2CAckRequest: 
+    ;INIT P5.2 as input with pull up 
+        bic.b   #BIT2, &P5DIR
+        bis.b   #BIT2, &P5REN
+        bis.b   #BIT2, &P5OUT
+         
+        call    DataDelay 		; Call I2C stability delay
 
+        ;Set Clock High 
+        bis.b   #BIT6, &P3OUT
+
+        call    Poll_Ack        ; Call polling loop for Ack
+
+        call    DataDelay 		; Call I2C stability delay
+
+        ;Set Clock low
+        bic.b   #BIT6, &P3OUT
+
+	;Re-INIT P5.2 as output
+		bis.b	#BIT2, &P5DIR	; Initializing pin as output
+
+        ret
+;----------------- END I2CAckReques Subroutine----------------------------------
+
+;-------------------------------------------------------------------------------
+; Poll_Ack:
+;-------------------------------------------------------------------------------
+Poll_Ack: 
+        bit.b   #BIT2, &P5IN            ; Test P5.2 for Ack (High)
+        jz      Poll_Ack                ; Until Data line is high keep polling
+        ret                             ; Once acknowledged return
+        
+;----------------- END Poll_Ack Subroutine--------------------------------------
 ;-------------------------------------------------------------------------------
 ; I2CStop: Transmit stop condition for I2C
 ;-------------------------------------------------------------------------------
