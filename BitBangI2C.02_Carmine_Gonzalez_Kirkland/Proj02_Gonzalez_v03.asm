@@ -51,12 +51,12 @@ StopWDT     mov.w   #WDTPW|WDTHOLD,&WDTCTL  ; Stop watchdog timer
 Init:
 
 	; Configuring P5.2 SDA
-	    bis.b	#BIT0, &P1DIR	; Initializing pin as output
-	    bis.b	#BIT0, &P1OUT	; Initializing LED1 as on
+	    bis.b	#BIT2, &P5DIR	; Initializing P5.2 as output
+	    bis.b	#BIT2, &P5OUT	; Configuring ON
 
     ; Configuring P3.6 SCL
-        bis.b	#BIT6, &P3DIR	; Initializing pin as output
-        bis.b	#BIT6, &P3OUT	; Initializing LED2 as on
+        bis.b	#BIT6, &P3DIR	; Initializing P3.6 as output
+        bis.b	#BIT6, &P3OUT	; Configuring ON
 
 	; Initialize Used Registers
         mov.w	#0, R4
@@ -78,7 +78,7 @@ Main:
         call	#I2CAckRequest		; I2C Wait for acknowledge
 
         mov.b	#0055h, R4
-        swp.b	R4
+        swpb	R4
         mov.b	#00008h, R6		; full byte being sent
 
         call	#I2CTx
@@ -150,14 +150,14 @@ I2CAckRequest:
         bis.b   #BIT2, &P5REN
         bis.b   #BIT2, &P5OUT
          
-        call    DataDelay 		; Call I2C stability delay
+        call    #DataDelay 		; Call I2C stability delay
 
         ;Set Clock High 
         bis.b   #BIT6, &P3OUT
 
-        call    Poll_Ack        ; Call polling loop for Ack
+        call    #Poll_Ack        ; Call polling loop for Ack
 
-        call    DataDelay 		; Call I2C stability delay
+        call    #DataDelay 		; Call I2C stability delay
 
         ;Set Clock low
         bic.b   #BIT6, &P3OUT
