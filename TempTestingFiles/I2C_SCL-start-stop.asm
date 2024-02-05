@@ -40,21 +40,48 @@ init:
         mov.w   #32768, &TB0CCR0        ; init CCR0
         mov.w   #1638, &TB0CCR1         ; init CCR1
 
-        bis.w   #CCIE, &TB0CCTL0
-        bic.w   #CCIFG, &TB0CCTL0
+        ; bis.w   #CCIE, &TB0CCTL0
+        ; bic.w   #CCIFG, &TB0CCTL0
 
-        bis.w   #CCIE, &TB0CCTL1
-        bic.w   #CCIFG, &TB0CCTL1
+        ; bis.w   #CCIE, &TB0CCTL1
+        ; bic.w   #CCIFG, &TB0CCTL1
 
         bis.w   #GIE, SR
 
 main: 
+        call    #Start_SCL
+        call    #delay
+        call    #Stop_SCL
+        call    #delay
         jmp main    
 
+; ~~~~~~~~~~~~~~~~~~~~~~~~ SUBROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;-------------------------------------------------------------------------------
-; Start and Stop functionality
+; Start_SCL: 
 ;-------------------------------------------------------------------------------
+Start_SCL: 
+        bis.w   #CCIE, &TB0CCTL0            ; enable CCR0
+        bic.w   #CCIFG, &TB0CCTL0
 
+        bis.w   #CCIE, &TB0CCTL1            ; enable CCR1
+        bic.w   #CCIFG, &TB0CCTL1
+
+        ret
+; --------------- END Start_SCL ------------------------------------------------
+
+;-------------------------------------------------------------------------------
+; Stop_SCL: 
+;-------------------------------------------------------------------------------
+Stop_SCL: 
+        bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
+        bic.w   #CCIFG, &TB0CCTL0
+
+        bic.w   #CCIE, &TB0CCTL1            ; disable CCR1
+        bic.w   #CCIFG, &TB0CCTL1
+        ret
+; --------------- END Stop_SCL -------------------------------------------------
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~ INTERRUPT SERVICE ROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;-------------------------------------------------------------------------------
 ; Interrupt Service Routines
 ;-------------------------------------------------------------------------------
