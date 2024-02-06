@@ -110,14 +110,13 @@ Main:
 
         call 	#I2CStart			; I2C Start Condition / load address into memory
 		call	#Start_SCL
+
 		call	#I2CTx				; I2C Transmit loaded bit
 		call	#I2CAckRequest
-;        mov.b	#0055h, R4
- ;       swpb	R4
-  ;      mov.b	#00008h, R6			; full byte being sent
 
         call	#I2CStop		; I2C Stop Condition
 		call	#Stop_SCL
+
         call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
 
         jmp		Main
@@ -145,13 +144,8 @@ I2CStart:
 ; Start_SCL:
 ;-------------------------------------------------------------------------------
 Start_SCL:
-        bis.w   #CCIE, &TB0CCTL0            ; enable CCR0
         bic.w   #CCIFG, &TB0CCTL0
-
-        bis.w   #CCIE, &TB0CCTL1            ; enable CCR1
-        bic.w   #CCIFG, &TB0CCTL1
-		bis.w	#GIE, SR				; Enable maskable interrupts
-		nop
+		bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
 
         ret
 ; --------------- END Start_SCL ------------------------------------------------
@@ -194,30 +188,34 @@ I2CAckRequest:
 	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for low
 	jnz		I2CAckRequest
 
-    bic.b   #BIT2, &P5DIR
+    bic.b	#BIT5, &P4OUT	; Configuring off
 
+I2CAckWait:
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
+	jz		I2CAckWait
 
     ret
 ;----------------- END I2CAckReques Subroutine----------------------------------
 
 ;-------------------------------------------------------------------------------
-; Poll_Ack:
-;-------------------------------------------------------------------------------
-Poll_Ack:
-        bit.b   #BIT2, &P5IN            ; Test P5.2 for Ack (High)
-        jnz      Poll_Ack                ; Until Data line is high keep polling
-        ret                             ; Once acknowledged return
-
-;----------------- END Poll_Ack Subroutine--------------------------------------
-;-------------------------------------------------------------------------------
 ; I2CStop: Transmit stop condition for I2C
 ;-------------------------------------------------------------------------------
 I2CStop:
-	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
-	jz		I2CStop
-    call    #DataDelay 		; Call I2C stability delay
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for low
+	jnz		I2CStop
+	call 	#DataDelay
 
-	bis.b	#BIT2, &P5OUT	; SDA High while clock is high
+StopHigh:
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
+	jz		StopHigh
+	call 	#DataDelay
+
+
+	call    #DataDelay 		; Call I2C stability delay
+	bis.b	#BIT2, &P5OUT
+
+
+	nop
 	ret
 	nop
 ;------------------------------- end of I2CStart -------------------------------
@@ -229,10 +227,7 @@ Stop_SCL:
         bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
         bic.w   #CCIFG, &TB0CCTL0
 
-        bic.w   #CCIE, &TB0CCTL1            ; disable CCR1
-        bic.w   #CCIFG, &TB0CCTL1
 		mov.w	#0, TB0R
-		nop
 
         ret
 ; --------------- END Stop_SCL -------------------------------------------------
@@ -244,7 +239,6 @@ I2CReset:
 	bis.b	#BIT2, &P5OUT
 	bis.b	#BIT6, &P3OUT
 	bis.b	#BIT0, R7
-
 	call	#I2CClockDelay
 	call	#I2CClockDelay
 	ret
@@ -255,7 +249,7 @@ I2CReset:
 ; I2CClockDelay: delay for clock pulses - not tuned todo
 ;-------------------------------------------------------------------------------
 I2CClockDelay:
-	mov.w	#003EFh, R5				; Tuned for 1s Delay with 8 loops
+	mov.w	#0F3EFh, R5				; Tuned for 1s Delay with 8 loops
 ClockDelayLoop:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		ClockDelayLoop
@@ -269,14 +263,14 @@ ClockDelayLoop:
 ; DataDelay: Very small delay for data
 ;-------------------------------------------------------------------------------
 DataDelay:
-	mov.w	#0F3EFh, R5
+	mov.w	#000EFh, R5
 	mov.w 	#01h, R8
 DataInner:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		DataInner
 
 DataOuter:
-	mov.w	#003EFh, R5
+	mov.w	#000EFh, R5
 	dec.w 	R8
 	jnz 	DataInner
 
@@ -289,7 +283,6 @@ DataOuter:
 ; ISR_TB0_CCR1
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR1:
-;        xor.b   #BIT6, &P3OUT
         bic.w   #CCIFG, &TB0CCTL1
         reti
 ; --------------- END ISR_TB0_CCR1 ---------------------------------------------
@@ -298,11 +291,9 @@ ISR_TB0_CCR1:
 ; ISR_TB0_CCR0
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR0:
-
         xor.b   #BIT6, &P3OUT
         xor.b	#BIT0, R7
         bic.w   #CCIFG, &TB0CCTL0
-EndTB0Interrupt:
         reti
 ; --------------- END ISR_TB0_CCR0 ---------------------------------------------
 
