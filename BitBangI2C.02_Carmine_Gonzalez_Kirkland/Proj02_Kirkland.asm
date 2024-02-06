@@ -74,6 +74,17 @@ Init:
         bis.b	#BIT6, &P3DIR	; Initializing P3.6 as output
         bis.b	#BIT6, &P3OUT	; Configuring ON
 
+	; Configuring Timer B0 - 1.05 (measured 1.00) s = 1E-6 * 8 * 5 * 26250
+		bis.w	#TBCLR, &TB0CTL			; Clear timers & dividers
+		bis.w	#TBSSEL__SMCLK, &TB0CTL	; Set SMCLK as the source
+		bis.w	#MC__UP, &TB0CTL		; Set mode as up
+		bis.w	#CNTL_0, &TB0CTL		; 16-bit counter length
+		mov.w	#26255, &TB0CCR0		; Setting Capture Compare Register 0
+		;bis.w	#ID__2, &TB0CTL			; Set divider to 8
+		;bis.w	#TBIDEX__5, &TB0EX0		; Set Expansion register divider to 5
+		bic.w	#CCIFG, &TB0CCTL0		; Clear interrupt flag - Capture/Compare
+;	bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
+
 	; Initialize Used Registers
         mov.w	#0, R4
         mov.w	#0, R5
