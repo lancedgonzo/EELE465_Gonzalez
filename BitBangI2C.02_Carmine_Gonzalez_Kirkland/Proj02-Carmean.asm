@@ -56,13 +56,7 @@ Init:
 
     ; Configuring P3.6 SCL
         bis.b	#BIT6, &P3DIR	; Initializing P3.6 as output
-        bis.b	#BIT6, &P3OUT	; Configuring ON
-
-
-; Configuring Timer B0
-        bis.w   #TBCLR, &TB0CTL
-        bis.w   #TBSSEL__SMCLK, &TB0CTL
-        bis.w   #MC__UP, &TB0CTL
+        bis.b	#BIT6, &P3OUT	; Configuring O
 
 
 
