@@ -12,6 +12,7 @@
 ;   v01:
 ;   v02:
 ;	v03: Transmits byte of data with ack, sends another address
+; 	v04: Switches to Compare interrupt for clock, finished I2C transmission
 ;
 ;	Ports:
 ;	    P3.6 - SCL
@@ -32,13 +33,13 @@
 ;		32K - N/C
 ;		SQW - N/C
 ;		RST - P4.5
+; 		R7 	Outer Clock Loop
 ;
 ;	Todo:
-;		Acknowledge: pretty much everything. acknowledge is just wait a clock cycle currently.
-;		Fix clock timing to be standard i2c frequency
-;		Test data delay with clock. Might be able to do with analog discovery. Not sure if delay is long enough.
-;		Flowchart
-;		Update to ports 3.6 / 5.2
+;		*Acknowledge: pretty much everything. acknowledge is just wait a clock cycle currently.
+;		*Fix clock timing to be standard i2c frequency
+;		*Test data delay with clock. Might be able to do with analog discovery. Not sure if delay is long enough.
+;		*Flowchart
 ;-------------------------------------------------------------------------------
             .cdecls C,LIST,"msp430.h"       ; Include device header file
             
@@ -83,28 +84,31 @@ Init:
 
 ;--------------------------------- end of init ---------------------------------
 
+
 ;-------------------------------------------------------------------------------
 ; Main: main subroutine
 ;-------------------------------------------------------------------------------
 Main:
 	bis.b	#BIT5, &P4OUT	; Disabling clock reset
+        call 	#I2CStart			; I2C Start Condition / load address into memory
+        call	#I2CTx				; I2C Transmit loaded bit
+		; call 	SCL_off				; Stops PWM for SCL hands off control to I2C_Ack
+        call	#I2CAckRequest		; I2C Wait for acknowledge
 
-    call 	#I2CStart			; I2C Start Condition / load address into memory
-    call	#I2CTx				; I2C Transmit loaded bit
-    call	#I2CAckRequest		; I2C Wait for acknowledge
+        mov.b	#0055h, R4
+        swpb	R4
+        mov.b	#00008h, R6			; full byte being sent
 
-;    mov.b	#0055h, R4
-;    swpb	R4
-;    mov.b	#00008h, R6		; full byte being sent
+		; call 	#SCL_on
+        call	#I2CTx
+		; call 	#SCL_off
+        call	#I2CAckRequest
 
-;    call	#I2CTx
-;    call	#I2CAckRequest
+        call	#I2CStop		; I2C Stop Condition
+        call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
+        call	#I2CReset
 
-    call	#I2CStop		; I2C Stop Condition
-    call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
-    call	#I2CReset
-
-    jmp		Main
+        jmp		Main
 ;--------------------------------- end of main ---------------------------------
 
 ;-------------------------------------------------------------------------------
@@ -121,21 +125,61 @@ I2CStart:
 	mov.b	#00008h, R6		; full byte being sent
 
 	call	#I2CClockDelay
+	call 	#DataDelay
+	call	#Start_SCL
 	ret
 	nop
 ;------------------------------- end of I2CStart -------------------------------
+
+;-------------------------------------------------------------------------------
+; Start_SCL:
+;-------------------------------------------------------------------------------
+Start_SCL:
+
+		bic.w 	#BIT6, &P5OUT				; Clock Low
+        bis.w   #CCIE, &TB0CCTL0            ; enable CCR0
+        bic.w   #CCIFG, &TB0CCTL0
+
+        bis.w   #CCIE, &TB0CCTL1            ; enable CCR1
+        bic.w   #CCIFG, &TB0CCTL1
+
+        ret
+; --------------- END Start_SCL ------------------------------------------------
+
+;-------------------------------------------------------------------------------
+; Stop_SCL:
+;-------------------------------------------------------------------------------
+Stop_SCL:
+		bic.w 	#BIT6, &P5OUT				; Clock Low
+        bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
+        bic.w   #CCIFG, &TB0CCTL0
+
+        bic.w   #CCIE, &TB0CCTL1            ; disable CCR1
+        bic.w   #CCIFG, &TB0CCTL1
+        ret
+; --------------- END Stop_SCL -------------------------------------------------
 
 ;-------------------------------------------------------------------------------
 ; I2CTx: Transmit data stored in R4.
 ;-------------------------------------------------------------------------------
 I2CTx:
 
-	bic.b	#BIT6, &P3OUT	; Clock to low
+	; bic.b	#BIT6, &P3OUT		; Clock to low
 
-	call	#DataDelay		; Delay for data
+	; call	#DataDelay			; Delay for data
 
-	rla.w	R4				; SDA rotate transmitted bit into carry
-	jc		SDA1			; output bit
+	mov.b	#0006Bh, R4		; 1101 0110b reversed from 0xEB Start bit + address 6B
+	rla.w	R4				; one less byte being sent due to start condition
+	bis.b	#BIT0, R4		; Set readwrite bit
+
+	todo add read write bit
+
+	swpb	R4
+	mov.b	#00008h, R6		; full byte being sent
+
+
+	rla.w	R4					; SDA rotate transmitted bit into carry
+	jc		SDA1				; output bit
 
 SDA0:
 	bic.b	#BIT2, &P5OUT
@@ -145,7 +189,7 @@ SDA1:
 	bis.b	#BIT2, &P5OUT
 
 TransmitClockCycle:
-	call	#I2CClockDelay	; Wait half clock period, before setting clock to high and waiting again.
+	call	#I2CClockDelay		; Wait half clock period, before setting clock to high and waiting again.
 	bis.b	#BIT6, &P3OUT
 	call	#I2CClockDelay
 
@@ -165,20 +209,17 @@ I2CAckRequest:
         bis.b   #BIT2, &P5REN
         bis.b   #BIT2, &P5OUT
 
-        ;Set Clock Low
-        bic.b   #BIT6, &P3OUT
-
         call    #DataDelay 		; Call I2C stability delay
 
+        ;Set Clock High
+        bis.b   #BIT6, &P3OUT
 
         call    #Poll_Ack        ; Call polling loop for Ack
 
-;		call	#I2CClockDelay
         call    #DataDelay 		; Call I2C stability delay
 
-        ;Set Clock high
-        bis.b   #BIT6, &P3OUT
-;		call	#I2CClockDelay
+        ;Set Clock low
+        bic.b   #BIT6, &P3OUT
 
 	;Re-INIT P5.2 as output
 		bis.b	#BIT2, &P5DIR	; Initializing pin as output
@@ -241,19 +282,38 @@ ClockDelayLoop:
 ; DataDelay: Very small delay for data
 ;-------------------------------------------------------------------------------
 DataDelay:
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
+	mov.w	#003EFh, R5
+	mov.w 	#08h, R7
+DataInner:
+	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
+	jnz		DataInner
+
+DataOuter:
+	dec.w 	R7
+	jnz 	DataOuter
+
 	ret
 	nop
 ;--------------------------------- end of delay --------------------------------
 
+; ~~~~~~~~~~~~~~~~~~~~~~~~ INTERRUPT SERVICE ROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;-------------------------------------------------------------------------------
+; ISR_TB0_CCR1
+;-------------------------------------------------------------------------------
+ISR_TB0_CCR1:
+        bic.b   #BIT6, &P3OUT
+        bic.w   #CCIFG, &TB0CCTL1
+        reti
+; --------------- END ISR_TB0_CCR1 ---------------------------------------------
+
+;-------------------------------------------------------------------------------
+; ISR_TB0_CCR0
+;-------------------------------------------------------------------------------
+ISR_TB0_CCR0:
+        bis.b   #BIT6, &P3OUT
+        bic.w   #CCIFG, &TB0CCTL0
+        reti
+; --------------- END ISR_TB0_CCR0 ---------------------------------------------
 
 ;-------------------------------------------------------------------------------
 ; Stack Pointer definition
@@ -266,3 +326,9 @@ DataDelay:
 ;-------------------------------------------------------------------------------
             .sect   ".reset"                ; MSP430 RESET Vector
             .short  RESET
+
+			.sect   ".int43"
+            .short  ISR_TB0_CCR0
+
+            .sect   ".int42"
+            .short  ISR_TB0_CCR1
