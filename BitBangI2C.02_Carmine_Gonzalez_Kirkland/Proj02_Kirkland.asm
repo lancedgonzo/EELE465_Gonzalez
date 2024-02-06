@@ -126,8 +126,8 @@ Main:
 ;        call	#I2CTx
 		; call 	#SCL_off
 ;        call	#I2CAckRequest
-		call	#Stop_SCL
         call	#I2CStop		; I2C Stop Condition
+		call	#Stop_SCL
         call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
         call	#I2CReset
 
@@ -158,8 +158,6 @@ I2CStart:
 ; Start_SCL:
 ;-------------------------------------------------------------------------------
 Start_SCL:
-
-		bic.w 	#BIT6, &P5OUT				; Clock Low
         bis.w   #CCIE, &TB0CCTL0            ; enable CCR0
         bic.w   #CCIFG, &TB0CCTL0
 
@@ -173,7 +171,6 @@ Start_SCL:
 ; Stop_SCL:
 ;-------------------------------------------------------------------------------
 Stop_SCL:
-		bic.w 	#BIT6, &P5OUT				; Clock Low
         bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
         bic.w   #CCIFG, &TB0CCTL0
 
@@ -263,6 +260,7 @@ Poll_Ack:
 ; I2CStop: Transmit stop condition for I2C
 ;-------------------------------------------------------------------------------
 I2CStop:
+
 	bic.b	#BIT6, &P3OUT	; SCL Low
 	call	#DataDelay		; data delay
 	bic.b	#BIT2, &P5OUT	; SDA Low
@@ -306,14 +304,14 @@ ClockDelayLoop:
 ;-------------------------------------------------------------------------------
 DataDelay:
 	mov.w	#003EFh, R5
-	mov.w 	#18h, R7
+	mov.w 	#18h, R8
 DataInner:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		DataInner
 
 DataOuter:
 	mov.w	#003EFh, R5
-	dec.w 	R7
+	dec.w 	R8
 	jnz 	DataInner
 
 	ret
