@@ -12,6 +12,7 @@
 ;   v01: 
 ;   v02:
 ;	v03: Transmits byte of data with ack, sends another address
+; 	v04: Switches to Compare interrupt for clock, finished I2C transmission
 ;
 ;	Ports:
 ;	    P3.6 - SCL
@@ -21,6 +22,7 @@
 ;	    R4	SDA
 ;	    R5	Clock Delay Loop
 ;	    R6	Remaining transmit bits
+; 		R7 	Outer Clock Loop 
 ;
 ;	Todo:
 ;		*Acknowledge: pretty much everything. acknowledge is just wait a clock cycle currently.
@@ -73,7 +75,6 @@ Init:
 ;-------------------------------------------------------------------------------
 Main:
         call 	#I2CStart			; I2C Start Condition / load address into memory
-		; call 	#SCL_on				; Starts PWM for SCL at freq 
         call	#I2CTx				; I2C Transmit loaded bit
 		; call 	SCL_off				; Stops PWM for SCL hands off control to I2C_Ack
         call	#I2CAckRequest		; I2C Wait for acknowledge
@@ -99,23 +100,18 @@ Main:
 ;-------------------------------------------------------------------------------
 I2CStart:
 	bic.b	#BIT2, &P5OUT	; SDA Low
-
-	mov.b	#0006Bh, R4		; 1101 0110b reversed from 0xEB Start bit + address 6B
-	rla.w	R4				; one less byte being sent due to start condition
-	bis.b	#BIT0, R4		; Set readwrite bit
-; todo add read write bit
-
-	swpb	R4
-	mov.b	#00008h, R6		; full byte being sent
-
-	call	#I2CClockDelay
+	call 	#DataDelay
+	call	#Start_SCL
 	ret
 	nop
 ;------------------------------- end of I2CStart -------------------------------
+
 ;-------------------------------------------------------------------------------
 ; Start_SCL: 
 ;-------------------------------------------------------------------------------
 Start_SCL: 
+
+		bic.w 	#BIT6, &P5OUT				; Clock Low
         bis.w   #CCIE, &TB0CCTL0            ; enable CCR0
         bic.w   #CCIFG, &TB0CCTL0
 
@@ -129,6 +125,7 @@ Start_SCL:
 ; Stop_SCL: 
 ;-------------------------------------------------------------------------------
 Stop_SCL: 
+		bic.w 	#BIT6, &P5OUT				; Clock Low
         bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
         bic.w   #CCIFG, &TB0CCTL0
 
@@ -142,9 +139,19 @@ Stop_SCL:
 ;-------------------------------------------------------------------------------
 I2CTx:
 
-	bic.b	#BIT6, &P3OUT		; Clock to low
+	; bic.b	#BIT6, &P3OUT		; Clock to low
 
-	call	#DataDelay			; Delay for data
+	; call	#DataDelay			; Delay for data
+
+	mov.b	#0006Bh, R4		; 1101 0110b reversed from 0xEB Start bit + address 6B
+	rla.w	R4				; one less byte being sent due to start condition
+	bis.b	#BIT0, R4		; Set readwrite bit
+
+	todo add read write bit
+
+	swpb	R4
+	mov.b	#00008h, R6		; full byte being sent
+
 
 	rla.w	R4					; SDA rotate transmitted bit into carry
 	jc		SDA1				; output bit
@@ -250,12 +257,16 @@ ClockDelayLoop:
 ; DataDelay: Very small delay for data
 ;-------------------------------------------------------------------------------
 DataDelay:
-	nop
-	nop
-	nop
-	nop
-	nop
-	nop
+	mov.w	#003EFh, R5				
+	mov.w 	#08h, R7
+DataInner:
+	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
+	jnz		DataInner
+
+DataOuter:
+	dec.w 	R7
+	jnz 	DataOuter
+	
 	ret
 	nop
 ;--------------------------------- end of delay --------------------------------
@@ -269,6 +280,7 @@ ISR_TB0_CCR1:
         bic.w   #CCIFG, &TB0CCTL1
         reti
 ; --------------- END ISR_TB0_CCR1 ---------------------------------------------
+
 ;-------------------------------------------------------------------------------
 ; ISR_TB0_CCR0
 ;-------------------------------------------------------------------------------
@@ -277,6 +289,7 @@ ISR_TB0_CCR0:
         bic.w   #CCIFG, &TB0CCTL0
         reti
 ; --------------- END ISR_TB0_CCR0 ---------------------------------------------
+
 ;-------------------------------------------------------------------------------
 ; Stack Pointer definition
 ;-------------------------------------------------------------------------------
