@@ -184,7 +184,7 @@ I2CTx:
 	rla.w	R4				; one less byte being sent due to start condition
 	bis.b	#BIT0, R4		; Set readwrite bit
 
-	todo add read write bit
+	;todo add read write bit
 
 	swpb	R4
 	mov.b	#00008h, R6		; full byte being sent
