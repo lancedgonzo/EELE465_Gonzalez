@@ -110,26 +110,15 @@ Main:
 
         call 	#I2CStart			; I2C Start Condition / load address into memory
 		call	#Start_SCL
-		call	#DataDelay
-		call	#DataDelay
-		call	#DataDelay
-
-        ;call	#I2CTx				; I2C Transmit loaded bit
-		; call 	SCL_off				; Stops PWM for SCL hands off control to I2C_Ack
-        ;call	#I2CAckRequest		; I2C Wait for acknowledge
-
+		call	#I2CTx				; I2C Transmit loaded bit
+		call	#I2CAckRequest
 ;        mov.b	#0055h, R4
  ;       swpb	R4
   ;      mov.b	#00008h, R6			; full byte being sent
 
-		; call 	#SCL_on
-;        call	#I2CTx
-		; call 	#SCL_off
-;        call	#I2CAckRequest
         call	#I2CStop		; I2C Stop Condition
 		call	#Stop_SCL
         call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
-        call	#I2CReset
 
         jmp		Main
 ;--------------------------------- end of main ---------------------------------
@@ -140,16 +129,14 @@ Main:
 I2CStart:
 	bic.b	#BIT2, &P5OUT	; SDA Low
 
-	mov.b	#00068h, R4		; 1101 0110b reversed from 0xEB Start bit + address 6B
+	mov.b	#00068h, R4		; 1101 000 reversed from 0xEB Start bit + address 6B
 	rla.w	R4				; one less byte being sent due to start condition
-	bic.b	#BIT0, R4		; Set readwrite bit
+	bis.b	#BIT0, R4		; Set readwrite bit
 
 	swpb	R4
 	mov.b	#00008h, R6		; full byte being sent
 
-	call	#I2CClockDelay
 	call 	#DataDelay
-	call	#Start_SCL
 	ret
 	nop
 ;------------------------------- end of I2CStart -------------------------------
@@ -163,40 +150,21 @@ Start_SCL:
 
         bis.w   #CCIE, &TB0CCTL1            ; enable CCR1
         bic.w   #CCIFG, &TB0CCTL1
+		bis.w	#GIE, SR				; Enable maskable interrupts
+		nop
 
         ret
 ; --------------- END Start_SCL ------------------------------------------------
 
-;-------------------------------------------------------------------------------
-; Stop_SCL:
-;-------------------------------------------------------------------------------
-Stop_SCL:
-        bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
-        bic.w   #CCIFG, &TB0CCTL0
-
-        bic.w   #CCIE, &TB0CCTL1            ; disable CCR1
-        bic.w   #CCIFG, &TB0CCTL1
-        ret
-; --------------- END Stop_SCL -------------------------------------------------
 
 ;-------------------------------------------------------------------------------
 ; I2CTx: Transmit data stored in R4.
 ;-------------------------------------------------------------------------------
 I2CTx:
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for low
+	jnz		I2CTx
 
-	; bic.b	#BIT6, &P3OUT		; Clock to low
-
-	; call	#DataDelay			; Delay for data
-
-	mov.b	#0006Bh, R4		; 1101 0110b reversed from 0xEB Start bit + address 6B
-	rla.w	R4				; one less byte being sent due to start condition
-	bis.b	#BIT0, R4		; Set readwrite bit
-
-	;todo add read write bit
-
-	swpb	R4
-	mov.b	#00008h, R6		; full byte being sent
-
+	call	#DataDelay			; Delay for data
 
 	rla.w	R4					; SDA rotate transmitted bit into carry
 	jc		SDA1				; output bit
@@ -209,10 +177,8 @@ SDA1:
 	bis.b	#BIT2, &P5OUT
 
 TransmitClockCycle:
-	call	#I2CClockDelay		; Wait half clock period, before setting clock to high and waiting again.
-	bis.b	#BIT6, &P3OUT
-	call	#I2CClockDelay
-
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
+	jz		TransmitClockCycle
 
 	dec.b	R6				; Loop until byte is sent
 	jnz		I2CTx
@@ -220,31 +186,18 @@ TransmitClockCycle:
 	ret
 	nop
 ;--------------------------------- end of I2CTx --------------------------------
+
 ;-------------------------------------------------------------------------------
 ; I2CAckRequest:
 ;-------------------------------------------------------------------------------
 I2CAckRequest:
-    ;INIT P5.2 as input with pull up
-        bic.b   #BIT2, &P5DIR
-        bis.b   #BIT2, &P5REN
-        bis.b   #BIT2, &P5OUT
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for low
+	jnz		I2CAckRequest
 
-        call    #DataDelay 		; Call I2C stability delay
+    bic.b   #BIT2, &P5DIR
 
-        ;Set Clock High
-        bis.b   #BIT6, &P3OUT
 
-        call    #Poll_Ack        ; Call polling loop for Ack
-
-        call    #DataDelay 		; Call I2C stability delay
-
-        ;Set Clock low
-        bic.b   #BIT6, &P3OUT
-
-	;Re-INIT P5.2 as output
-		bis.b	#BIT2, &P5DIR	; Initializing pin as output
-
-        ret
+    ret
 ;----------------- END I2CAckReques Subroutine----------------------------------
 
 ;-------------------------------------------------------------------------------
@@ -260,18 +213,29 @@ Poll_Ack:
 ; I2CStop: Transmit stop condition for I2C
 ;-------------------------------------------------------------------------------
 I2CStop:
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
+	jz		I2CStop
+    call    #DataDelay 		; Call I2C stability delay
 
-	bic.b	#BIT6, &P3OUT	; SCL Low
-	call	#DataDelay		; data delay
-	bic.b	#BIT2, &P5OUT	; SDA Low
-	call	#I2CClockDelay
-	bis.b	#BIT6, &P3OUT	; SCL High
-	call	#DataDelay		; data delay
-	bis.b	#BIT2, &P5OUT	; SDA Low
-	call	#I2CClockDelay
+	bis.b	#BIT2, &P5OUT	; SDA High while clock is high
 	ret
 	nop
 ;------------------------------- end of I2CStart -------------------------------
+
+;-------------------------------------------------------------------------------
+; Stop_SCL:
+;-------------------------------------------------------------------------------
+Stop_SCL:
+        bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
+        bic.w   #CCIFG, &TB0CCTL0
+
+        bic.w   #CCIE, &TB0CCTL1            ; disable CCR1
+        bic.w   #CCIFG, &TB0CCTL1
+		mov.w	#0, TB0R
+		nop
+
+        ret
+; --------------- END Stop_SCL -------------------------------------------------
 
 ;-------------------------------------------------------------------------------
 ; I2CReset: Holds both lines high for a clock cycle for debugging
@@ -279,6 +243,8 @@ I2CStop:
 I2CReset:
 	bis.b	#BIT2, &P5OUT
 	bis.b	#BIT6, &P3OUT
+	bis.b	#BIT0, R7
+
 	call	#I2CClockDelay
 	call	#I2CClockDelay
 	ret
@@ -303,8 +269,8 @@ ClockDelayLoop:
 ; DataDelay: Very small delay for data
 ;-------------------------------------------------------------------------------
 DataDelay:
-	mov.w	#003EFh, R5
-	mov.w 	#18h, R8
+	mov.w	#0F3EFh, R5
+	mov.w 	#01h, R8
 DataInner:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		DataInner
@@ -332,9 +298,11 @@ ISR_TB0_CCR1:
 ; ISR_TB0_CCR0
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR0:
+
         xor.b   #BIT6, &P3OUT
         xor.b	#BIT0, R7
         bic.w   #CCIFG, &TB0CCTL0
+EndTB0Interrupt:
         reti
 ; --------------- END ISR_TB0_CCR0 ---------------------------------------------
 
