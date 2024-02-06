@@ -2,5 +2,6 @@
 /targetConfigs/
 /.settings/
 /.launches/
+lnk_msp430fr2355.cmd
 .ccsproject
 .cproject
