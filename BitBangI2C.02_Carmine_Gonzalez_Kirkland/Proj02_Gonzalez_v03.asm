@@ -23,11 +23,10 @@
 ;	    R6	Remaining transmit bits
 ;
 ;	Todo:
-;		Acknowledge: pretty much everything. acknowledge is just wait a clock cycle currently.
-;		Fix clock timing to be standard i2c frequency
-;		Test data delay with clock. Might be able to do with analog discovery. Not sure if delay is long enough.
-;		Flowchart
-;		Update to ports 3.6 / 5.2
+;		*Acknowledge: pretty much everything. acknowledge is just wait a clock cycle currently.
+;		*Fix clock timing to be standard i2c frequency
+;		*Test data delay with clock. Might be able to do with analog discovery. Not sure if delay is long enough.
+;		*Flowchart
 ;-------------------------------------------------------------------------------
             .cdecls C,LIST,"msp430.h"       ; Include device header file
             
@@ -115,12 +114,12 @@ I2CStart:
 ;-------------------------------------------------------------------------------
 I2CTx:
 
-	bic.b	#BIT6, &P3OUT	; Clock to low
+	bic.b	#BIT6, &P3OUT		; Clock to low
 
-	call	#DataDelay		; Delay for data
+	call	#DataDelay			; Delay for data
 
-	rla.w	R4				; SDA rotate transmitted bit into carry
-	jc		SDA1			; output bit
+	rla.w	R4					; SDA rotate transmitted bit into carry
+	jc		SDA1				; output bit
 
 SDA0:
 	bic.b	#BIT2, &P5OUT
@@ -130,7 +129,7 @@ SDA1:
 	bis.b	#BIT2, &P5OUT
 
 TransmitClockCycle:
-	call	#I2CClockDelay	; Wait half clock period, before setting clock to high and waiting again.
+	call	#I2CClockDelay		; Wait half clock period, before setting clock to high and waiting again.
 	bis.b	#BIT6, &P3OUT
 	call	#I2CClockDelay
 
