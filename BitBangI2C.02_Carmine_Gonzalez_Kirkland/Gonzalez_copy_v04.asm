@@ -86,8 +86,8 @@ Main:
 
         call    #I2CClockDelay
         call 	#I2CStart			; I2C Start Condition
-        ; call	#I2CTx				; I2C Transmit loaded bit
-		; ; call 	SCL_off				; Stops PWM for SCL hands off control to I2C_Ack
+        call	#I2CTx				; I2C Transmit loaded bit
+		; call 	SCL_off			; Stops PWM for SCL hands off control to I2C_Ack
         ; call	#I2CAckRequest		; I2C Wait for acknowledge
 
         ; mov.b	#0055h, R4
@@ -153,16 +153,16 @@ Stop_SCL:
 ;-------------------------------------------------------------------------------
 I2CTx:
 
-	mov.b	#0006Bh, R4		    ; 1101 0110b reversed from 0xEB Start bit + address 6B
-	rla.w	R4				    ; one less byte being sent due to start condition
-	bis.b	#BIT0, R4		    ; Set readwrite bit
+	mov.b	#SlaveAdr, R4		    ; 0110 1000 Slave Address
+    swpb    R4                      ; Swap Bytes
 
-	; todo add read write bit
+	rla.w	R4				        ; one less byte being sent due to start condition
+	bis.b	#BIT0, R4		        ; Set read/write bit
 
 	swpb	R4
 	mov.b	#00008h, R6		    ; full byte being sent
 
-
+I2CTx_Bus:
 	rla.w	R4					; SDA rotate transmitted bit into carry
 	jc		SDA1				; output bit
 
@@ -176,9 +176,8 @@ SDA1:
 TransmitClockCycle:
 	call	#DataDelay	
 
-
 	dec.b	R6				; Loop until byte is sent
-	jnz		I2CTx
+	jnz		I2CTx_Bus
 
 	ret
 	nop
@@ -276,6 +275,12 @@ DataDelayLoop:
 	ret
 	nop
 ;--------------------------------- end of delay --------------------------------
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~ Data Memory Allocation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            .data  
+            .retain
+
+SlaveAdr:   .long   01101000
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~ INTERRUPT SERVICE ROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;-------------------------------------------------------------------------------
