@@ -9,21 +9,21 @@ CMD_SRCS += \
 ../lnk_msp430fr2355.cmd 
 
 ASM_SRCS += \
-../AckPollingLoopFunctionTest.asm 
+../I2C_SCL-start-stop.asm 
 
 OBJS += \
-./AckPollingLoopFunctionTest.obj 
+./I2C_SCL-start-stop.obj 
 
 ASM_DEPS += \
-./AckPollingLoopFunctionTest.d 
+./I2C_SCL-start-stop.d 
 
 OBJS__QUOTED += \
-"AckPollingLoopFunctionTest.obj" 
+"I2C_SCL-start-stop.obj" 
 
 ASM_DEPS__QUOTED += \
-"AckPollingLoopFunctionTest.d" 
+"I2C_SCL-start-stop.d" 
 
 ASM_SRCS__QUOTED += \
-"../AckPollingLoopFunctionTest.asm" 
+"../I2C_SCL-start-stop.asm" 
 
 

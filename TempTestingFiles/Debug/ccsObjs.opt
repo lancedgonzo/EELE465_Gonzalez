@@ -1,4 +1,4 @@
-"./AckPollingLoopFunctionTest.obj"
+"./I2C_SCL-start-stop.obj"
 "../lnk_msp430fr2355.cmd"
 -lfrwp_init.a
 -llibc.a

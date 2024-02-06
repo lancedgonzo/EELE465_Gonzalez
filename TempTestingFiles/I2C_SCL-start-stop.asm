@@ -86,12 +86,12 @@ Stop_SCL:
 ;-------------------------------------------------------------------------------
 delay: 
         mov.w   #003EFh, R4
-        mov.w   #0Fh, R5
+        mov.w   #0FFh, R5
 
 delay_inner:			; Tuned for 1s Delay with 8 loops
 	dec.w	R4		; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz     delay_inner
-        
+
 delay_outer: 
         dec.w   R5
         jnz     delay_outer
