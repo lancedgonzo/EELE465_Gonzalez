@@ -23,6 +23,8 @@
 ;	    R4	SDA
 ;	    R5	Clock Delay Loop
 ;	    R6	Remaining transmit bits
+;		R7	Status Register
+;			B0 - Clock
 ;
 ;	RTC:
 ;		Vin - 3V3
@@ -89,8 +91,12 @@ Init:
         mov.w	#0, R4
         mov.w	#0, R5
         mov.w	#0, R6
+        mov.w	#0, R7
+		bis.b	#BIT0, R7
 
-	    nop
+		nop
+		bis.w	#GIE, SR				; Enable maskable interrupts
+		nop
 	    bic.b	#LOCKLPM5, &PM5CTL0		; Disable High-z
 
 ;--------------------------------- end of init ---------------------------------
@@ -100,21 +106,27 @@ Init:
 ; Main: main subroutine
 ;-------------------------------------------------------------------------------
 Main:
-	bis.b	#BIT5, &P4OUT	; Disabling clock reset
-        call 	#I2CStart			; I2C Start Condition / load address into memory
-        call	#I2CTx				; I2C Transmit loaded bit
-		; call 	SCL_off				; Stops PWM for SCL hands off control to I2C_Ack
-        call	#I2CAckRequest		; I2C Wait for acknowledge
+		bis.b	#BIT5, &P4OUT		; Disabling RTC reset
 
-        mov.b	#0055h, R4
-        swpb	R4
-        mov.b	#00008h, R6			; full byte being sent
+        call 	#I2CStart			; I2C Start Condition / load address into memory
+		call	#Start_SCL
+		call	#DataDelay
+		call	#DataDelay
+		call	#DataDelay
+
+        ;call	#I2CTx				; I2C Transmit loaded bit
+		; call 	SCL_off				; Stops PWM for SCL hands off control to I2C_Ack
+        ;call	#I2CAckRequest		; I2C Wait for acknowledge
+
+;        mov.b	#0055h, R4
+ ;       swpb	R4
+  ;      mov.b	#00008h, R6			; full byte being sent
 
 		; call 	#SCL_on
-        call	#I2CTx
+;        call	#I2CTx
 		; call 	#SCL_off
-        call	#I2CAckRequest
-
+;        call	#I2CAckRequest
+		call	#Stop_SCL
         call	#I2CStop		; I2C Stop Condition
         call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
         call	#I2CReset
@@ -183,7 +195,7 @@ I2CTx:
 	rla.w	R4				; one less byte being sent due to start condition
 	bis.b	#BIT0, R4		; Set readwrite bit
 
-	todo add read write bit
+	;todo add read write bit
 
 	swpb	R4
 	mov.b	#00008h, R6		; full byte being sent
@@ -294,14 +306,15 @@ ClockDelayLoop:
 ;-------------------------------------------------------------------------------
 DataDelay:
 	mov.w	#003EFh, R5
-	mov.w 	#08h, R7
+	mov.w 	#18h, R7
 DataInner:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		DataInner
 
 DataOuter:
+	mov.w	#003EFh, R5
 	dec.w 	R7
-	jnz 	DataOuter
+	jnz 	DataInner
 
 	ret
 	nop
@@ -312,7 +325,7 @@ DataOuter:
 ; ISR_TB0_CCR1
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR1:
-        bic.b   #BIT6, &P3OUT
+;        xor.b   #BIT6, &P3OUT
         bic.w   #CCIFG, &TB0CCTL1
         reti
 ; --------------- END ISR_TB0_CCR1 ---------------------------------------------
@@ -321,7 +334,8 @@ ISR_TB0_CCR1:
 ; ISR_TB0_CCR0
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR0:
-        bis.b   #BIT6, &P3OUT
+        xor.b   #BIT6, &P3OUT
+        xor.b	#BIT0, R7
         bic.w   #CCIFG, &TB0CCTL0
         reti
 ; --------------- END ISR_TB0_CCR0 ---------------------------------------------
