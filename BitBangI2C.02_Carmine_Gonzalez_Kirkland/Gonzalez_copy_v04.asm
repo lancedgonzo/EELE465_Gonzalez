@@ -79,7 +79,6 @@ Init:
 
 ;--------------------------------- end of init ---------------------------------
 
-
 ;-------------------------------------------------------------------------------
 ; Main:
 ;-------------------------------------------------------------------------------
@@ -265,10 +264,10 @@ ClockDelayLoop:
 ;--------------------------------- end of delay --------------------------------
 
 ;-------------------------------------------------------------------------------
-; DataDelay: Very small delay for data
+; DataDelay: Currently Tuned to 1ms Delay
 ;-------------------------------------------------------------------------------
 DataDelay:
-	mov.w	#015Dh, R5				
+	mov.w	#015Dh, R5			    ; 0x15Dh -> 349d Approx 1ms 
 	;mov.w 	#08h, R7
 DataDelayLoop:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
