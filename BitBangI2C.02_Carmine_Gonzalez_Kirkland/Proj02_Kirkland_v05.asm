@@ -85,6 +85,7 @@ Init:
 		;bis.w	#TBIDEX__5, &TB0EX0		; Set Expansion register divider to 5
 		bic.w	#CCIFG, &TB0CCTL0		; Clear interrupt flag - Capture/Compare
 ;	bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
+		bis.w 	#GIE, SR
 
 	; Initialize Used Registers
         mov.w	#0, R4
@@ -148,7 +149,7 @@ I2CStart:
 ;-------------------------------------------------------------------------------
 Start_SCL:
 
-		bic.w 	#BIT6, &P5OUT				; Clock Low
+		bic.w 	#BIT6, &P3OUT				; Clock Low
         bis.w   #CCIE, &TB0CCTL0            ; enable CCR0
         bic.w   #CCIFG, &TB0CCTL0
 
@@ -184,7 +185,7 @@ I2CTx:
 	rla.w	R4				; one less byte being sent due to start condition
 	bis.b	#BIT0, R4		; Set readwrite bit
 
-	todo add read write bit
+	; todo add read write bit
 
 	swpb	R4
 	mov.b	#00008h, R6		; full byte being sent
