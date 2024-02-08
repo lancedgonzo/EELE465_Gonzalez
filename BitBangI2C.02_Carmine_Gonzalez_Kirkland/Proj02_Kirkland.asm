@@ -114,6 +114,14 @@ Main:
 		call	#I2CTx				; I2C Transmit loaded bit
 		call	#I2CAckRequest
 
+
+		mov.b	#000ABh, R4
+		swpb	R4
+		mov.b	#00008h, R6
+
+		call	#I2CTx				; I2C Transmit loaded bit
+		call	#I2CAckRequest
+
         call	#I2CStop		; I2C Stop Condition
 		call	#Stop_SCL
 
