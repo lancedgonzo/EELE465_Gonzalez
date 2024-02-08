@@ -14,7 +14,7 @@
 ;	v03: Transmits byte of data with ack, sends another address
 ; 	v04: Switches to Compare interrupt for clock, finished I2C transmission
 ;	v05: Merged lances and zachs code. Working stop transmit and start code
-;	v06: Merged zachs acknowledge code.
+;	v06: Merged zachs acknowledge code. Updated clock speed to 5kHz
 ;
 ;	Ports:
 ;	    P3.6 - SCL
