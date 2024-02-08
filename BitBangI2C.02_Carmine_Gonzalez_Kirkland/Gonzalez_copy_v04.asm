@@ -13,7 +13,11 @@
 ;   v02:
 ;	v03: Transmits byte of data with ack, sends another address
 ; 	v04: Switches to Compare interrupt for clock, finished I2C transmission
+<<<<<<<< HEAD:BitBangI2C.02_Carmine_Gonzalez_Kirkland/Gonzalez_copy_v04.asm
 ;	v05: Merged lances and zachs code
+========
+;	v05: Working stop transmit and start code
+>>>>>>>> 240201_Kirkland:BitBangI2C.02_Carmine_Gonzalez_Kirkland/Proj02_Kirkland_v05.asm
 ;
 ;	Ports:
 ;	    P3.6 - SCL
