@@ -81,7 +81,7 @@ Init:
 		bis.w	#TBSSEL__SMCLK, &TB0CTL	; Set SMCLK as the source
 		bis.w	#MC__UP, &TB0CTL		; Set mode as up
 		bis.w	#CNTL_0, &TB0CTL		; 16-bit counter length
-		mov.w	#26255, &TB0CCR0		; Setting Capture Compare Register 0
+		mov.w	#22255, &TB0CCR0		; Setting Capture Compare Register 0
 		;bis.w	#ID__2, &TB0CTL			; Set divider to 8
 		;bis.w	#TBIDEX__5, &TB0EX0		; Set Expansion register divider to 5
 		bic.w	#CCIFG, &TB0CCTL0		; Clear interrupt flag - Capture/Compare
@@ -130,7 +130,7 @@ I2CStart:
 
 	mov.b	#00068h, R4		; 1101 000 reversed from 0xEB Start bit + address 6B
 	rla.w	R4				; one less byte being sent due to start condition
-	bis.b	#BIT0, R4		; Set readwrite bit
+	bic.b	#BIT0, R4		; Set readwrite bit
 
 	swpb	R4
 	mov.b	#00008h, R6		; full byte being sent
@@ -149,8 +149,6 @@ Start_SCL:
 
         ret
 ; --------------- END Start_SCL ------------------------------------------------
-
-
 ;-------------------------------------------------------------------------------
 ; I2CTx: Transmit data stored in R4.
 ;-------------------------------------------------------------------------------
@@ -177,6 +175,11 @@ TransmitClockCycle:
 	dec.b	R6				; Loop until byte is sent
 	jnz		I2CTx
 
+TransmitEnd:
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
+	jnz		TransmitEnd
+	mov.b	#00008h, R6		; full byte being sent
+
 	ret
 	nop
 ;--------------------------------- end of I2CTx --------------------------------
@@ -185,37 +188,31 @@ TransmitClockCycle:
 ; I2CAckRequest:
 ;-------------------------------------------------------------------------------
 I2CAckRequest:
-	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for low
-	jnz		I2CAckRequest
-
-    bic.b	#BIT5, &P4OUT	; Configuring off
-
-I2CAckWait:
+	bis.b	#BIT2, &P5OUT
+AckWait1:
 	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
-	jz		I2CAckWait
+	jz		AckWait1
 
-    ret
+AckWait2:
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
+	jnz		AckWait2
+	bic.b	#BIT2, &P5OUT
+	ret
+    nop
 ;----------------- END I2CAckReques Subroutine----------------------------------
 
 ;-------------------------------------------------------------------------------
 ; I2CStop: Transmit stop condition for I2C
 ;-------------------------------------------------------------------------------
 I2CStop:
-	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for low
-	jnz		I2CStop
-	call 	#DataDelay
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
+	jz		I2CStop
 
 StopHigh:
-	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
-	jz		StopHigh
+	call 	#DataDelay
+	bis.b	#BIT2, &P5OUT
 	call 	#DataDelay
 
-
-	call    #DataDelay 		; Call I2C stability delay
-	bis.b	#BIT2, &P5OUT
-
-
-	nop
 	ret
 	nop
 ;------------------------------- end of I2CStart -------------------------------
@@ -263,14 +260,14 @@ ClockDelayLoop:
 ; DataDelay: Very small delay for data
 ;-------------------------------------------------------------------------------
 DataDelay:
-	mov.w	#000EFh, R5
+	mov.w	#009EFh, R5
 	mov.w 	#01h, R8
 DataInner:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		DataInner
 
 DataOuter:
-	mov.w	#000EFh, R5
+	mov.w	#009EFh, R5
 	dec.w 	R8
 	jnz 	DataInner
 
@@ -285,6 +282,7 @@ DataOuter:
 ISR_TB0_CCR1:
         bic.w   #CCIFG, &TB0CCTL1
         reti
+        nop
 ; --------------- END ISR_TB0_CCR1 ---------------------------------------------
 
 ;-------------------------------------------------------------------------------
@@ -295,6 +293,7 @@ ISR_TB0_CCR0:
         xor.b	#BIT0, R7
         bic.w   #CCIFG, &TB0CCTL0
         reti
+        nop
 ; --------------- END ISR_TB0_CCR0 ---------------------------------------------
 
 ;-------------------------------------------------------------------------------
