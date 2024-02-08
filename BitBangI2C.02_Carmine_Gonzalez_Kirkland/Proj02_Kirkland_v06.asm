@@ -27,6 +27,7 @@
 ;	    R6	Remaining transmit bits
 ;		R7	Status Register
 ;			B0 - Clock
+;			B1 - Ack
 ;
 ;	RTC:
 ;		Vin - 3V3
