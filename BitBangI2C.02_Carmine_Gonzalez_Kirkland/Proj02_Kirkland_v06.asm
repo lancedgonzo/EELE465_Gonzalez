@@ -14,7 +14,7 @@
 ;	v03: Transmits byte of data with ack, sends another address
 ; 	v04: Switches to Compare interrupt for clock, finished I2C transmission
 ;	v05: Merged lances and zachs code. Working stop transmit and start code
-;	v06: Merged zachs acknowledge code. Updated clock speed to 5kHz
+;	v06: Merged zachs acknowledge code. Updated clock speed to 5kHz. Added code to receive data from RTC
 ;
 ;	Ports:
 ;	    P3.6 - SCL
@@ -28,6 +28,7 @@
 ;		R7	Status Register
 ;			B0 - Clock
 ;			B1 - Ack
+;			B4-7 Memory counter
 ;
 ;	RTC:
 ;		Vin - 3V3
@@ -109,21 +110,17 @@ Init:
 Main:
 	bis.b	#BIT5, &P4OUT		; Disabling RTC reset
 
-    call 	#I2CStart			; I2C Start Condition / load address into memory
+    call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
+    ;call 	#I2CStartSend		; I2C Start Condition / load address into memory
 	call	#Start_SCL
 
 	call	#I2CTx				; I2C Transmit loaded bit
 	call	#I2CAckRequest
 
-
-	mov.b	#000ABh, R4
-	swpb	R4
-	mov.b	#00008h, R6
-
-	call	#I2CTx				; I2C Transmit loaded bit
 	call	#I2CDataLineInput
-	call	#I2CAckRequest
+	call	#I2CRx				; I2C Transmit loaded bit
 	call	#I2CDataLineOutput
+	call	#I2CAckRequest
 
     call	#I2CStop		; I2C Stop Condition
 	call	#Stop_SCL
@@ -134,9 +131,9 @@ Main:
 ;--------------------------------- end of main ---------------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CStart:
+; I2CStartSend:
 ;-------------------------------------------------------------------------------
-I2CStart:
+I2CStartSend:
 	bic.b	#BIT2, &P5OUT	; SDA Low
 
 	mov.b	#00068h, R4		; 1101 000 reversed from 0xEB Start bit + address 6B
@@ -149,17 +146,36 @@ I2CStart:
 	call 	#DataDelay
 	ret
 	nop
-;------------------------------- end of I2CStart -------------------------------
+;----------------------------- end of I2CStartSend -----------------------------
+
+;-------------------------------------------------------------------------------
+; I2CStartRecieve:
+;-------------------------------------------------------------------------------
+I2CStartRecieve:
+	bic.b	#BIT2, &P5OUT	; SDA Low
+
+	mov.b	#00068h, R4		; 1101 000 reversed from 0xEB Start bit + address 6B
+	rla.w	R4				; one less byte being sent due to start condition
+	bis.b	#BIT0, R4		; Set readwrite bit
+
+	swpb	R4
+	mov.b	#00008h, R6		; full byte being sent
+
+	call 	#DataDelay
+	ret
+	nop
+;---------------------------- end of I2CStartRecieve ---------------------------
 
 ;-------------------------------------------------------------------------------
 ; Start_SCL:
 ;-------------------------------------------------------------------------------
 Start_SCL:
-        bic.w   #CCIFG, &TB0CCTL0
-		bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
+    bic.w   #CCIFG, &TB0CCTL0
+	bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
 
-        ret
+    ret
 ; --------------- END Start_SCL ------------------------------------------------
+
 ;-------------------------------------------------------------------------------
 ; I2CTx: Transmit data stored in R4.
 ;-------------------------------------------------------------------------------
@@ -194,6 +210,40 @@ TransmitEnd:
 	ret
 	nop
 ;--------------------------------- end of I2CTx --------------------------------
+
+;-------------------------------------------------------------------------------
+; I2CRx: Receive data to R4.
+;-------------------------------------------------------------------------------
+I2CRx:
+	mov.b	#00008h, R6		; full byte being received
+
+I2CRxLowPoll:
+	bit.b	#BIT2, &P5IN	; test input line
+	jnz		RxInputHigh
+RxInputLow:
+	bic.b	#BIT0, R4
+	jmp		RxInputSetDone
+RxInputHigh:
+	bis.b	#BIT0, R4
+RxInputSetDone:
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for low
+
+	jnz		I2CRxLowPoll
+
+	rla.b	R4
+
+I2CRxHighPoll:
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for low
+	jz		I2CRxHighPoll
+
+
+	dec.b	R6				; Loop until byte is received
+	jnz		I2CRxLowPoll
+
+	ret
+	nop
+;--------------------------------- end of I2CTx --------------------------------
+
 
 ;-------------------------------------------------------------------------------
 ; I2CDataLineInput:
@@ -258,12 +308,12 @@ StopHigh:
 ; Stop_SCL:
 ;-------------------------------------------------------------------------------
 Stop_SCL:
-        bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
-        bic.w   #CCIFG, &TB0CCTL0
+    bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
+    bic.w   #CCIFG, &TB0CCTL0
 
-		mov.w	#0, TB0R
+	mov.w	#0, TB0R
 
-        ret
+    ret
 ; --------------- END Stop_SCL -------------------------------------------------
 
 ;-------------------------------------------------------------------------------
@@ -283,7 +333,7 @@ I2CReset:
 ; I2CClockDelay: delay for clock pulses - not tuned todo
 ;-------------------------------------------------------------------------------
 I2CClockDelay:
-	mov.w	#0F3EFh, R5				; Tuned for 1s Delay with 8 loops
+	mov.w	#000EFh, R5				; Tuned for 1s Delay with 8 loops
 ClockDelayLoop:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		ClockDelayLoop
@@ -307,27 +357,27 @@ DataDelay:
 ; ISR_TB0_CCR1
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR1:
-        bic.w   #CCIFG, &TB0CCTL1
-        reti
-        nop
+    bic.w   #CCIFG, &TB0CCTL1
+    reti
+    nop
 ; --------------- END ISR_TB0_CCR1 ---------------------------------------------
 
 ;-------------------------------------------------------------------------------
 ; ISR_TB0_CCR0
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR0:
-        xor.b   #BIT6, &P3OUT
-        xor.b	#BIT0, R7
-        bic.w   #CCIFG, &TB0CCTL0
-        reti
-        nop
+    xor.b   #BIT6, &P3OUT
+    xor.b	#BIT0, R7
+    bic.w   #CCIFG, &TB0CCTL0
+    reti
+    nop
 ; --------------- END ISR_TB0_CCR0 ---------------------------------------------
 
 ;-------------------------------------------------------------------------------
 ; Stack Pointer definition
 ;-------------------------------------------------------------------------------
-            .global __STACK_END
-            .sect   .stack
+    .global __STACK_END
+    .sect   .stack
             
 ;-------------------------------------------------------------------------------
 ; Interrupt Vectors
