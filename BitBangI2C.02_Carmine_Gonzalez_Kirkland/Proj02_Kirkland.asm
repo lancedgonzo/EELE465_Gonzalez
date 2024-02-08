@@ -13,6 +13,7 @@
 ;   v02:
 ;	v03: Transmits byte of data with ack, sends another address
 ; 	v04: Switches to Compare interrupt for clock, finished I2C transmission
+;	v05: Working stop transmit and start code
 ;
 ;	Ports:
 ;	    P3.6 - SCL
