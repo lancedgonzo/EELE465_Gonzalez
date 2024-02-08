@@ -139,15 +139,11 @@ Stop_SCL:
 ;-------------------------------------------------------------------------------
 I2CTx:
 
-	; bic.b	#BIT6, &P3OUT		; Clock to low
-
-	; call	#DataDelay			; Delay for data
-
 	mov.b	#0006Bh, R4		; 1101 0110b reversed from 0xEB Start bit + address 6B
 	rla.w	R4				; one less byte being sent due to start condition
 	bis.b	#BIT0, R4		; Set readwrite bit
 
-	todo add read write bit
+	; todo add read write bit
 
 	swpb	R4
 	mov.b	#00008h, R6		; full byte being sent
@@ -164,9 +160,7 @@ SDA1:
 	bis.b	#BIT2, &P5OUT
 
 TransmitClockCycle:
-	call	#I2CClockDelay		; Wait half clock period, before setting clock to high and waiting again.
-	bis.b	#BIT6, &P3OUT
-	call	#I2CClockDelay
+	call	#DataDelay	
 
 
 	dec.b	R6				; Loop until byte is sent
@@ -266,7 +260,7 @@ DataInner:
 DataOuter:
 	dec.w 	R7
 	jnz 	DataOuter
-	
+
 	ret
 	nop
 ;--------------------------------- end of delay --------------------------------
