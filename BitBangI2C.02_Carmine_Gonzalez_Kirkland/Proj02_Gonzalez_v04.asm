@@ -29,6 +29,7 @@
 ;		*Fix clock timing to be standard i2c frequency
 ;		*Test data delay with clock. Might be able to do with analog discovery. Not sure if delay is long enough.
 ;		*Flowchart
+
 ;-------------------------------------------------------------------------------
             .cdecls C,LIST,"msp430.h"       ; Include device header file
             
