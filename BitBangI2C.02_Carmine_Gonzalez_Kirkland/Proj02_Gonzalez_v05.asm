@@ -121,6 +121,7 @@ Main:
 
 	call	#I2CDataLineInput
 	call	#I2CRx				; I2C Transmit loaded bit
+	call 	#SaveData
 	call	#I2CDataLineOutput
 	call	#I2CAckRequest
 
@@ -223,7 +224,7 @@ I2CRxLowPoll:
 	bit.b	#BIT2, &P5IN	; test input line
 	jnz		RxInputHigh
 RxInputLow:
-	bic.b	#BIT0, R4
+	bic.b	#BIT0, R4		
 	jmp		RxInputSetDone
 RxInputHigh:
 	bis.b	#BIT0, R4
@@ -246,6 +247,49 @@ I2CRxHighPoll:
 	nop
 ;--------------------------------- end of I2CTx --------------------------------
 
+;-------------------------------------------------------------------------------
+; SaveData:
+;-------------------------------------------------------------------------------
+SaveData:
+	; Check if seconds SI has been set
+		;^ IF 0: Load R4 into Seconds place in data
+		;^ IF 1: move on
+	bit.b 	#BIT4, R7
+	jz 		LoadSeconds
+
+	bit.b 	#BIT5, R7
+	jz 		LoadMinutes
+
+	bit.b 	#BIT6, R7
+	jz 		LoadHours
+
+	bit.b 	#BIT7, R7
+	jz 		LoadTemp	
+	
+	mov.w 	#000h, R4
+	ret 
+	nop 
+
+LoadSeconds:
+	mov.w 	R4, SecondsData
+	ret
+	nop
+
+LoadMinutes:
+	mov.w 	R4, MinutesData
+	ret
+	nop 
+
+LoadHours:
+	mov.w 	R4, HoursData
+	ret
+	nop
+
+LoadTemp:
+	mov.w R4, TempData
+	ret
+	nop 
+;--------------------------- end of I2CDataLineInput ---------------------------
 
 ;-------------------------------------------------------------------------------
 ; I2CDataLineInput:
@@ -353,6 +397,19 @@ DataDelay:
 	ret
 	nop
 ;--------------------------------- end of delay --------------------------------
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~ Data Memory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;-------------------------------------------------------------------------------
+; Data Memory 
+;-------------------------------------------------------------------------------        
+        .data                   ; go to data memory (2000h)
+        .retain                 ; keep section even if not used 
+
+SecondsData:   	.space  2
+MinutesData:   	.space  2
+HoursData:   	.space  2
+TempData: 		.space	2
+;~~~~~~~~~~~~~~~~~~~~~~~~~ End Data Memory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~ INTERRUPT SERVICE ROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;-------------------------------------------------------------------------------
