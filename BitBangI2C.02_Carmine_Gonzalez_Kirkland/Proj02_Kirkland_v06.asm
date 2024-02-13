@@ -265,11 +265,15 @@ I2CAckRequest:
 ;	bis.b	#BIT2, &P5OUT
 
 AckWait1:
+; test input for 1 or 0
+
+; set status bit to 1 if 1; 0 if 0
+
 	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
 	jz		AckWait1
 
 AckWait2:
-	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for high
+	bit.b	#BIT0, R7		; Test clock if zero, keep waiting for low
 	jnz		AckWait2
 ;	bic.b	#BIT2, &P5OUT
 	ret
