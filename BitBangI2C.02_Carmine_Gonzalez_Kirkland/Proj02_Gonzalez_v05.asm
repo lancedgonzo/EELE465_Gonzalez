@@ -112,29 +112,32 @@ Init:
 Main:
 	bis.b	#BIT5, &P4OUT		; Disabling RTC reset
 
-	; Initialize the RTC
+InitLoop:
+
+	; Initialize the RTC Loop (1 iteration for each register to be adressed)
 		; Transmit Start condition, slave address transmit, 
 		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
 		call	#Start_SCL
 		call	#I2CTx				; I2C Transmit loaded bit
-
-		; Acknowledge 
 		call	#I2CAckRequest
 
-		; Loop for 4 RTC registers (Seconds, Minutes, Hours, Temperature, others as needed)
-			; RTC register address + Write 
-			; Acknowledge
-		call 	#I2CTxWrite		; DOESN'T EXIST Yet, will contain looping feature
-
-		; NACK
+		;-Address + Data
+		call 	#I2CTxWrite		; DOESN'T EXIST Yet, address for writing to
+		call 	#I2CAckRequest
+		call 	#SendData		; DOESN'T Exist yet, data to be written
+		call 	#I2CNACK		; DOESN'T Exist yet,   
 
 		; Stop condition 
 		call	#I2CStop		; I2C Stop Condition
 		call	#Stop_SCL
+
+		; decrement loop counter
+		jnz InitLoop 			; Continue Init until loop counter 0
 		
 ReadLoop:
 	; Reading Time loop
 		; Transmit start condition, slave address transmit
+		; consider combining into one subroutine? 
 		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
 		call	#Start_SCL
 		call	#I2CTx				; I2C Transmit loaded bit
@@ -146,34 +149,36 @@ ReadLoop:
 			; RTC register address + Read
 			; Acknowledge
 			; Recieve Data from RTC 
+			; NACK condition						; This will be important to stop the RTC from continuing onward
 			; Save into data memory 
-		call I2CTxRead 				; DOES NOT EXIST YET contain looping function
-
-		; NACK
+		call 	#I2CTxRead 							; DOES NOT EXIST YET contains looping function
 
 		; Stop condition 
 		call	#I2CStop		; I2C Stop Condition
 		call	#Stop_SCL
 
+		; decrement loop counter
 		jmp 	ReadLoop
 
 
+
+; Below is code from Grant's Previous work. 
     ; call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
 	; call	#Start_SCL
 
 	; call	#I2CTx				; I2C Transmit loaded bit
 	; call	#I2CAckRequest
 
-	call	#I2CDataLineInput
-	call	#I2CRx				; I2C Transmit loaded bit
-	call 	#SaveData
-	call	#I2CDataLineOutput
-	call	#I2CAckRequest
+	; call	#I2CDataLineInput
+	; call	#I2CRx				; I2C Transmit loaded bit
+	; call 	#SaveData
+	; call	#I2CDataLineOutput
+	; call	#I2CAckRequest
 
-    call	#I2CStop		; I2C Stop Condition
-	call	#Stop_SCL
+    ; call	#I2CStop		; I2C Stop Condition
+	; call	#Stop_SCL
 
-    call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
+    ; call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
 
     jmp		Main
 ;--------------------------------- end of main ---------------------------------
