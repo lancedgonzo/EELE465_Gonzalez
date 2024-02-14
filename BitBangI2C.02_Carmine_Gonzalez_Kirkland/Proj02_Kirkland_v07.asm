@@ -15,7 +15,7 @@
 ; 	v04: Switches to Compare interrupt for clock, finished I2C transmission
 ;	v05: Merged lances and zachs code. Working stop transmit and start code
 ;	v06: Merged zachs acknowledge code. Updated clock speed to 5kHz. Added code to receive data from RTC
-;	v07:
+;	v07: Set up memory allocation. Adjusted the read data and save data sections to cycle through memory positions
 ;
 ;	Ports:
 ;	    P3.6 - SCL
@@ -40,13 +40,10 @@
 ;		32K - N/C
 ;		SQW - N/C
 ;		RST - P4.5
-; 		R7 	Outer Clock Loop
 ;
 ;	Todo:
-;		*Acknowledge: pretty much everything. acknowledge is just wait a clock cycle currently.
-;		*Fix clock timing to be standard i2c frequency
-;		*Test data delay with clock. Might be able to do with analog discovery. Not sure if delay is long enough.
-;		*Flowchart
+; 		* Add save to data memory functionality
+;		* Flowchart
 ;-------------------------------------------------------------------------------
             .cdecls C,LIST,"msp430.h"       ; Include device header file
             
@@ -90,7 +87,7 @@ Init:
 		;bis.w	#ID__2, &TB0CTL			; Set divider to 8
 		;bis.w	#TBIDEX__5, &TB0EX0		; Set Expansion register divider to 5
 		bic.w	#CCIFG, &TB0CCTL0		; Clear interrupt flag - Capture/Compare
-;	bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
+		;bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
 
 	; Initialize Used Registers
         mov.w	#0, R4
@@ -98,6 +95,11 @@ Init:
         mov.w	#0, R6
         mov.w	#0, R7
 		bis.b	#BIT0, R7
+
+		bic.b 	#BIT4, R7		; Used for Seconds register save to data indicator
+		bis.b 	#BIT5, R7 		; Used for Minutes register save to data indicator
+		bis.b 	#BIT6, R7 		; Used for Hours register save to data indicator
+		bis.b 	#BIT7, R7 		; Used for Temperature register save to data indicator
 
 		nop
 		bis.w	#GIE, SR				; Enable maskable interrupts
@@ -111,27 +113,73 @@ Init:
 Main:
 	bis.b	#BIT5, &P4OUT		; Disabling RTC reset
 
+InitLoop:
 
-    call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
-    ;call 	#I2CStartSend		; I2C Start Condition / load address into memory
-	call	#Start_SCL
-	call	#I2CTx				; I2C Transmit loaded bit
-	call	#I2CAckRequest
+	; Initialize the RTC Loop (1 iteration for each register to be adressed)
+		; Transmit Start condition, slave address transmit,
+		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
+		call	#Start_SCL
+		call	#I2CTx				; I2C Transmit loaded bit
+		call	#I2CAckRequest
+
+		;-Address + Data
+;		call 	#I2CTxWrite		; DOESN'T EXIST Yet, address for writing to
+		call 	#I2CAckRequest
+		call 	#SendData		; DOESN'T Exist yet, data to be written
+		call 	#I2CNACK		; DOESN'T Exist yet,
+
+		; Stop condition
+		call	#I2CStop		; I2C Stop Condition
+		call	#Stop_SCL
+
+		; decrement loop counter
+		jnz InitLoop 			; Continue Init until loop counter 0
+
+ReadLoop:
+	; Reading Time loop
+		; Transmit start condition, slave address transmit
+		; consider combining into one subroutine?
+		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
+		call	#Start_SCL
+		call	#I2CTx				; I2C Transmit loaded bit
+
+		; Acknowledge
+		call	#I2CAckRequest
+
+		; Loop for 4 RTC registers
+			; RTC register address + Read
+			; Acknowledge
+			; Recieve Data from RTC
+			; NACK condition						; This will be important to stop the RTC from continuing onward
+			; Save into data memory
+		call 	#I2CTxRead 							; DOES NOT EXIST YET contains looping function
+
+		; Stop condition
+		call	#I2CStop		; I2C Stop Condition
+		call	#Stop_SCL
+
+		; decrement loop counter
+		jmp 	ReadLoop
 
 
 
+; Below is code from Grant's Previous work.
+    ; call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
+	; call	#Start_SCL
 
+	; call	#I2CTx				; I2C Transmit loaded bit
+	; call	#I2CAckRequest
 
+	; call	#I2CDataLineInput
+	; call	#I2CRx				; I2C Transmit loaded bit
+	; call 	#SaveData
+	; call	#I2CDataLineOutput
+	; call	#I2CAckRequest
 
-	call	#I2CDataLineInput
-	call	#I2CRx				; I2C Transmit loaded bit
-	call	#I2CDataLineOutput
-	call	#I2CAckRequest
+    ; call	#I2CStop		; I2C Stop Condition
+	; call	#Stop_SCL
 
-    call	#I2CStop		; I2C Stop Condition
-	call	#Stop_SCL
-
-    call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
+    ; call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
 
     jmp		Main
 ;--------------------------------- end of main ---------------------------------
@@ -250,6 +298,56 @@ I2CRxHighPoll:
 	nop
 ;--------------------------------- end of I2CTx --------------------------------
 
+;-------------------------------------------------------------------------------
+; SaveData:
+;-------------------------------------------------------------------------------
+SaveData:
+	mov.w	#000Fh, R8		; Move bit mask into R8
+	and.w	R7, R8			; Mask R7 using R8
+	or.w	#2000h, R8		; or R8 with 2000h to generate address
+
+	mov.w	R4, 0(R8)		; Move contents of R4 to address
+
+	inc.w	R8				; Set R8 to next address location and check if its rolled over. if it has, reset.
+	inc.w	R8
+
+	cmp		#0020h, R8
+
+	jnz		PostSaveStatus
+	mov.w	#2000h, R8;
+
+PostSaveStatus:
+	and.b	#00F0h, R7		; Update R7 with new address
+	or.b	R8, R7
+
+;	mov.w 	#000h, R4
+	ret
+	nop
+;--------------------------- end of I2CDataLineInput ---------------------------
+
+;-------------------------------------------------------------------------------
+; ReadData:
+;-------------------------------------------------------------------------------
+ReadData:
+	mov.w	#000Fh, R8		; Move bit mask into R8
+	and.w	R7, R8			; Mask R7 using R8
+	or.w	#2000h, R8		; or R8 with 2000h to generate address
+
+	mov.w	@R8+, R4		; Move contents of R4 to address and increment to next address location. then check if it has rolled over, if it has reset.
+
+	cmp		#0020h, R8
+
+	jnz		PostSaveStatus
+	mov.w	#2000h, R8;
+
+PostReadStatus:
+	and.b	#00F0h, R7		; Update R7 with new address
+	or.b	R8, R7
+
+;	mov.w 	#000h, R4
+	ret
+	nop
+;--------------------------- end of I2CDataLineInput ---------------------------
 
 ;-------------------------------------------------------------------------------
 ; I2CDataLineInput:
@@ -288,6 +386,7 @@ AckWait2:
 ;	bic.b	#BIT2, &P5OUT
 	ret
     nop
+
 ;----------------- END I2CAckReques Subroutine----------------------------------
 
 ;-------------------------------------------------------------------------------
@@ -365,6 +464,31 @@ DataDelay:
 	nop
 ;--------------------------------- end of delay --------------------------------
 
+; ~~~~~~~~~~~~~~~~~~~~~~~~ Data Memory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;-------------------------------------------------------------------------------
+; Data Memory
+;-------------------------------------------------------------------------------
+    .data                   ; go to data memory (2000h)
+    .retain                 ; keep section even if not used
+
+SecondsAddr1:	.short    0000h
+SecondsData1:	.space    2
+MinutesAddr2:	.short    0001h
+MinutesData2:	.space    2
+HoursAddr3:		.short    0002h
+HoursData3:		.space    2
+SecondsAddr4:	.short    0000h
+SecondsData4:	.space    2
+MinutesAddr5:	.short    0001h
+MinutesData5:	.space    2
+HoursAddr6:		.short    0002h
+HoursData6:		.space    2
+TempAddr7:		.short    0011h
+TempData7:		.space    2
+TempAddr8:		.short    0012h
+TempData8:		.space    2
+;~~~~~~~~~~~~~~~~~~~~~~~~~ End Data Memory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 ; ~~~~~~~~~~~~~~~~~~~~~~~~ INTERRUPT SERVICE ROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;-------------------------------------------------------------------------------
 ; ISR_TB0_CCR1
@@ -403,27 +527,3 @@ ISR_TB0_CCR0:
 
             .sect   ".int42"
             .short  ISR_TB0_CCR1
-
-;-------------------------------------------------------------------------------
-; Data Memory
-;-------------------------------------------------------------------------------
-	.data                   ; go to data memory (2000h)
-	.retain                 ; keep section even if not used
-
-SecondsAddr1:	.short	0000h
-SecondsData1:	.space	2
-MinutesAddr2:	.short	0001h
-MinutesData2:	.space	2
-HoursAddr3:		.short	0002h
-HoursData3:		.space	2
-SecondsAddr4:	.short	0000h
-SecondsData4:	.space	2
-MinutesAddr5:	.short	0001h
-MinutesData5:	.space	2
-HoursAddr6:		.short	0002h
-HoursData6:		.space	2
-TempAddr7:		.short	0011h
-TempData7:		.space	2
-TempAddr8:		.short	0012h
-TempData8:		.space	2
-;~~~~~~~~~~~~~~~~~~~~~~~~~ End Data Memory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
