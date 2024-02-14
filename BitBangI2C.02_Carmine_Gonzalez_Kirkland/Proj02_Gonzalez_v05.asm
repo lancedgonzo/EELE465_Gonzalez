@@ -112,12 +112,57 @@ Init:
 Main:
 	bis.b	#BIT5, &P4OUT		; Disabling RTC reset
 
-    call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
-    ;call 	#I2CStartSend		; I2C Start Condition / load address into memory
-	call	#Start_SCL
+	; Initialize the RTC
+		; Transmit Start condition, slave address transmit, 
+		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
+		call	#Start_SCL
+		call	#I2CTx				; I2C Transmit loaded bit
 
-	call	#I2CTx				; I2C Transmit loaded bit
-	call	#I2CAckRequest
+		; Acknowledge 
+		call	#I2CAckRequest
+
+		; Loop for 4 RTC registers (Seconds, Minutes, Hours, Temperature, others as needed)
+			; RTC register address + Write 
+			; Acknowledge
+		call 	#I2CTxWrite		; DOESN'T EXIST Yet, will contain looping feature
+
+		; NACK
+
+		; Stop condition 
+		call	#I2CStop		; I2C Stop Condition
+		call	#Stop_SCL
+		
+ReadLoop:
+	; Reading Time loop
+		; Transmit start condition, slave address transmit
+		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
+		call	#Start_SCL
+		call	#I2CTx				; I2C Transmit loaded bit
+
+		; Acknowledge
+		call	#I2CAckRequest
+
+		; Loop for 4 RTC registers
+			; RTC register address + Read
+			; Acknowledge
+			; Recieve Data from RTC 
+			; Save into data memory 
+		call I2CTxRead 				; DOES NOT EXIST YET contain looping function
+
+		; NACK
+
+		; Stop condition 
+		call	#I2CStop		; I2C Stop Condition
+		call	#Stop_SCL
+
+		jmp 	ReadLoop
+
+
+    ; call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
+	; call	#Start_SCL
+
+	; call	#I2CTx				; I2C Transmit loaded bit
+	; call	#I2CAckRequest
 
 	call	#I2CDataLineInput
 	call	#I2CRx				; I2C Transmit loaded bit
