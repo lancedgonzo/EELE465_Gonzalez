@@ -15,6 +15,7 @@
 ; 	v04: Switches to Compare interrupt for clock, finished I2C transmission
 ;	v05: Merged lances and zachs code. Working stop transmit and start code
 ;	v06: Merged zachs acknowledge code. Updated clock speed to 5kHz. Added code to receive data from RTC
+;	v07:
 ;
 ;	Ports:
 ;	    P3.6 - SCL
@@ -402,3 +403,27 @@ ISR_TB0_CCR0:
 
             .sect   ".int42"
             .short  ISR_TB0_CCR1
+
+;-------------------------------------------------------------------------------
+; Data Memory
+;-------------------------------------------------------------------------------
+	.data                   ; go to data memory (2000h)
+	.retain                 ; keep section even if not used
+
+SecondsAddr1:	.short	0000h
+SecondsData1:	.space	2
+MinutesAddr2:	.short	0001h
+MinutesData2:	.space	2
+HoursAddr3:		.short	0002h
+HoursData3:		.space	2
+SecondsAddr4:	.short	0000h
+SecondsData4:	.space	2
+MinutesAddr5:	.short	0001h
+MinutesData5:	.space	2
+HoursAddr6:		.short	0002h
+HoursData6:		.space	2
+TempAddr7:		.short	0011h
+TempData7:		.space	2
+TempAddr8:		.short	0012h
+TempData8:		.space	2
+;~~~~~~~~~~~~~~~~~~~~~~~~~ End Data Memory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
