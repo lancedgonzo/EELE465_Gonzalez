@@ -184,8 +184,6 @@ ReadLoop:
     jmp		Main
 ;--------------------------------- end of main ---------------------------------
 I2CTxWrite:
-    ; Assuming R4 contains the address to write to
-    ; Assuming R5 contains the data to be transmitted
 
     ; Transmit start condition
     call    #I2CStartSend
@@ -202,7 +200,7 @@ I2CTxWrite:
     mov.w   &2000h, R4           ; Move memory address to R4
     call    #I2CTx
 
-	mov.w	@R4+, R5
+    mov.w   @R4+, R5
     ; Send data
     mov.w   R5, R4           ; Move data to R4
     call    #I2CTx
