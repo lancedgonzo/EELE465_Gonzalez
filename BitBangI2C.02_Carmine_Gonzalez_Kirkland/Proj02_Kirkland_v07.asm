@@ -116,6 +116,7 @@ Init:
 ;-------------------------------------------------------------------------------
 Main:
 	bis.b	#BIT5, &P4OUT		; Disabling RTC reset
+	;jmp		ReadLoopInit
 	mov.b	#03h, R9
 InitLoop:
 
@@ -125,7 +126,7 @@ InitLoop:
 		call	#Start_SCL
 		call	#I2CTx				; I2C Transmit loaded bit
 
-		;call	#I2CDataLineInput
+		call	#I2CDataLineInput
 		call	#I2CAckRequest
 		call	#I2CDataLineOutput
 
@@ -137,7 +138,7 @@ InitLoop:
 		call 	#ReadData
 		call	#I2CTx
 
-		;call	#I2CDataLineInput
+		call	#I2CDataLineInput
 		call	#I2CAckRequest
 		call	#I2CDataLineOutput
 
@@ -148,7 +149,7 @@ InitLoop:
 		call 	#ReadData
 		call	#I2CTx				; I2C Transmit loaded bit
 
-		;call	#I2CDataLineInput
+		call	#I2CDataLineInput
 		call	#I2CAckRequest
 		call	#I2CDataLineOutput
 
@@ -165,7 +166,7 @@ InitLoop:
 		call	#I2CReset
 		dec.b	R9
 		jnz		InitLoop 			; Continue Init until loop counter 0
-		jmp		ReadLoop
+		jmp		Main
 
 AckFailed:
 		call	#I2CStop		; I2C Stop Condition
@@ -173,17 +174,46 @@ AckFailed:
 		call	#I2CReset
 		jmp		Main
 
+ReadLoopInit:
+	mov.b	#05h, R9
+
 ReadLoop:
-;	; Reading Time loop
-;		; Transmit start condition, slave address transmit
-;		; consider combining into one subroutine?
-;		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
-;		call	#Start_SCL
-;		call	#I2CTx				; I2C Transmit loaded bit
-;
+	; Reading Time loop
+		; Transmit start condition, slave address transmit
+		; consider combining into one subroutine?
+		call 	#I2CStartSend	; I2C Start Condition / load address into memory
+		call	#Start_SCL
+		call	#I2CTx				; I2C Transmit loaded bit
+
 ;		; Acknowledge
-;		call	#I2CAckRequest
+		;call	#I2CDataLineInput
+		call	#I2CAckRequest
+		call	#I2CDataLineOutput
 ;
+		call 	#ReadData
+		call	#I2CTx				; I2C Transmit loaded bit
+
+		;call	#I2CDataLineInput
+		call	#I2CAckRequest
+		call	#I2CDataLineOutput
+
+		call	#I2CStop		; I2C Stop Condition
+		call	#Stop_SCL
+
+		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
+		call	#Start_SCL
+		call	#I2CTx				; I2C Transmit loaded bit
+
+;		; Acknowledge
+		;call	#I2CDataLineInput
+		call	#I2CAckRequest
+		call	#I2CDataLineOutput
+
+		;call	#I2CDataLineInput
+		call	#I2CRx				; I2C Transmit loaded bit
+		call	#I2CDataLineOutput
+		call	#SaveData
+
 ;		; Loop for 4 RTC registers
 ;			; RTC register address + Read
 ;			; Acknowledge
@@ -193,31 +223,14 @@ ReadLoop:
 ;		call 	#I2CTxRead 							; DOES NOT EXIST YET contains looping function
 ;
 ;		; Stop condition
-;		call	#I2CStop		; I2C Stop Condition
-;		call	#Stop_SCL
-;
-;		; decrement loop counter
-;		jmp 	ReadLoop
+		call	#I2CStop		; I2C Stop Condition
+		call	#Stop_SCL
 
+		; decrement loop counter
+		dec.b	R9
+		jnz 	ReadLoop
+		jmp		ReadLoopInit
 
-
-; Below is code from Grant's Previous work.
-    ; call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
-	; call	#Start_SCL
-
-	; call	#I2CTx				; I2C Transmit loaded bit
-	; call	#I2CAckRequest
-
-	; call	#I2CDataLineInput
-	; call	#I2CRx				; I2C Transmit loaded bit
-	; call 	#SaveData
-	; call	#I2CDataLineOutput
-	; call	#I2CAckRequest
-
-    ; call	#I2CStop		; I2C Stop Condition
-	; call	#Stop_SCL
-
-    ; call	#I2CReset		; I2C Hold both lines high for a couple clock cycles for debugging
 
     jmp		Main
 ;--------------------------------- end of main ---------------------------------
@@ -520,9 +533,9 @@ MinutesData2:	.short    0056h
 HoursAddr3:		.short    0002h
 HoursData3:		.short    0010h
 SecondsAddr4:	.short    0000h
-SecondsData4:	.space    2
+SecondsData4:	.short    0000h
 MinutesAddr5:	.short    0001h
-MinutesData5:	.space    2
+MinutesData5:	.short    0000h
 HoursAddr6:		.short    0002h
 HoursData6:		.space    2
 TempAddr7:		.short    0011h
