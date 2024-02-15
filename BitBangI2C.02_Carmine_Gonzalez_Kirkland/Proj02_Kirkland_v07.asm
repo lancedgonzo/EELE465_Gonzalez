@@ -116,7 +116,7 @@ Init:
 ;-------------------------------------------------------------------------------
 Main:
 	bis.b	#BIT5, &P4OUT		; Disabling RTC reset
-	;jmp		ReadLoopInit
+	jmp		ReadLoopInit
 	mov.b	#03h, R9
 InitLoop:
 
@@ -449,7 +449,16 @@ AckWait2:
 I2CDataLineOutput:
 	;Re-INIT P5.2 as output
 	bis.b	#BIT2, &P5DIR	; Initializing pin as output
+	bit.b	#BIT6, R7			; Test if ack recieved
+	jz		DataLineOutLow
 
+    bis.b   #BIT2, &P5OUT
+	jmp		EndDataLineOutput
+
+DataLineOutLow:
+    bic.b   #BIT2, &P5OUT
+
+EndDataLineOutput:
     ret
     nop
 ;--------------------------- end of I2CDataLineOutput --------------------------
