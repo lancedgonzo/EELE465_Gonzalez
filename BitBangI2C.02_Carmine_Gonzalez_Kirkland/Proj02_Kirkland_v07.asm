@@ -123,38 +123,28 @@ InitLoop:
 	; Initialize the RTC Loop (1 iteration for each register to be adressed)
 		; Transmit Start condition, slave address transmit,
 		call 	#I2CStartSend		; I2C Start Condition / load address into memory
-		call	#Start_SCL
 		call	#I2CTx				; I2C Transmit loaded bit
-
-		call	#I2CDataLineInput
 		call	#I2CAckRequest
-		call	#I2CDataLineOutput
 
 		bit.b	#BIT6, R7			; Test if ack recieved
-		jnz		AckFailed
+		jnz		AckFailedInit
 
 		;-Address + Data
 		; Transmit First section of memory
 		call 	#ReadData
 		call	#I2CTx
-
-		call	#I2CDataLineInput
 		call	#I2CAckRequest
-		call	#I2CDataLineOutput
 
 		bit.b	#BIT6, R7			; Test if ack recieved
-		jnz		AckFailed
+		jnz		AckFailedInit
 
 		; Transmit Second section of memory
 		call 	#ReadData
 		call	#I2CTx				; I2C Transmit loaded bit
-
-		call	#I2CDataLineInput
 		call	#I2CAckRequest
-		call	#I2CDataLineOutput
 
 		bit.b	#BIT6, R7			; Test if ack recieved
-		jnz		AckFailed
+		jnz		AckFailedInit
 
 ;		call 	#I2CNACK		; DOESN'T Exist yet,
 
@@ -168,7 +158,7 @@ InitLoop:
 		jnz		InitLoop 			; Continue Init until loop counter 0
 		jmp		Main
 
-AckFailed:
+AckFailedInit:
 		call	#I2CStop		; I2C Stop Condition
 		call	#Stop_SCL
 		call	#I2CReset
@@ -176,43 +166,47 @@ AckFailed:
 
 ReadLoopInit:
 	mov.b	#05h, R9
+	bic.b	#BIT0, R7
+	bic.b	#BIT1, R7
+	bis.b	#BIT2, R7
+	bis.b	#BIT3, R7
+	bic.b	#BIT4, R7
 
 ReadLoop:
 	; Reading Time loop
 		; Transmit start condition, slave address transmit
 		; consider combining into one subroutine?
 		call 	#I2CStartSend	; I2C Start Condition / load address into memory
-		call	#Start_SCL
 		call	#I2CTx				; I2C Transmit loaded bit
-
-;		; Acknowledge
-		;call	#I2CDataLineInput
 		call	#I2CAckRequest
-		call	#I2CDataLineOutput
-;
+
+		bit.b	#BIT6, R7			; Test if ack recieved
+		jnz		AckFailedRead
+
 		call 	#ReadData
 		call	#I2CTx				; I2C Transmit loaded bit
-
-		;call	#I2CDataLineInput
 		call	#I2CAckRequest
-		call	#I2CDataLineOutput
+
+		bit.b	#BIT6, R7			; Test if ack recieved
+		jnz		AckFailedRead
 
 		call	#I2CStop		; I2C Stop Condition
 		call	#Stop_SCL
 
+		call	#I2CReset
+
 		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
-		call	#Start_SCL
 		call	#I2CTx				; I2C Transmit loaded bit
-
-;		; Acknowledge
-		;call	#I2CDataLineInput
 		call	#I2CAckRequest
-		call	#I2CDataLineOutput
 
-		;call	#I2CDataLineInput
 		call	#I2CRx				; I2C Transmit loaded bit
-		call	#I2CDataLineOutput
+		call	#I2CAckRequest
+
+		call	#I2CStop		; I2C Stop Condition
+		call	#Stop_SCL
+
 		call	#SaveData
+		call	#I2CReset
 
 ;		; Loop for 4 RTC registers
 ;			; RTC register address + Read
@@ -220,19 +214,20 @@ ReadLoop:
 ;			; Recieve Data from RTC
 ;			; NACK condition						; This will be important to stop the RTC from continuing onward
 ;			; Save into data memory
-;		call 	#I2CTxRead 							; DOES NOT EXIST YET contains looping function
 ;
 ;		; Stop condition
-		call	#I2CStop		; I2C Stop Condition
-		call	#Stop_SCL
 
 		; decrement loop counter
 		dec.b	R9
 		jnz 	ReadLoop
 		jmp		ReadLoopInit
 
+AckFailedRead:
+		call	#I2CStop		; I2C Stop Condition
+		call	#Stop_SCL
+		call	#I2CReset
+		jmp		ReadLoopInit
 
-    jmp		Main
 ;--------------------------------- end of main ---------------------------------
 
 ;-------------------------------------------------------------------------------
@@ -249,6 +244,7 @@ I2CStartSend:
 	mov.b	#00008h, R6		; full byte being sent
 
 	call 	#DataDelay
+	call 	#Start_SCL
 	ret
 	nop
 ;----------------------------- end of I2CStartSend -----------------------------
@@ -267,6 +263,7 @@ I2CStartRecieve:
 	mov.b	#00008h, R6		; full byte being sent
 
 	call 	#DataDelay
+	call 	#Start_SCL
 	ret
 	nop
 ;---------------------------- end of I2CStartRecieve ---------------------------
@@ -320,6 +317,7 @@ TransmitEnd:
 ; I2CRx: Receive data to R4.
 ;-------------------------------------------------------------------------------
 I2CRx:
+	call	#I2CDataLineInput
 	mov.b	#00008h, R6		; full byte being received
 
 I2CRxLowPoll:
@@ -345,6 +343,7 @@ I2CRxHighPoll:
 	dec.b	R6				; Loop until byte is received
 	jnz		I2CRxLowPoll
 
+	call	#I2CDataLineOutput
 	ret
 	nop
 ;--------------------------------- end of I2CTx --------------------------------
@@ -353,23 +352,23 @@ I2CRxHighPoll:
 ; SaveData:
 ;-------------------------------------------------------------------------------
 SaveData:
-	mov.w	#000Fh, R8		; Move bit mask into R8
+	mov.w	#001Fh, R8		; Move bit mask into R8
 	and.w	R7, R8			; Mask R7 using R8
 	or.w	#2000h, R8		; or R8 with 2000h to generate address
 
 	mov.w	R4, 0(R8)		; Move contents of R4 to address
-	swpb	R4
 
 	inc.w	R8				; Set R8 to next address location and check if its rolled over. if it has, reset.
 	inc.w	R8
 
-	cmp		#0020h, R8
+	cmp		#2020h, R8
 
 	jnz		PostSaveStatus
 	mov.w	#2000h, R8;
 
 PostSaveStatus:
-	and.b	#00F0h, R7		; Update R7 with new address
+	and.b	#00E0h, R7		; Update R7 with new address
+	and.b	#001Fh, R8		; Update R7 with new address
 	or.b	R8, R7
 
 ;	mov.w 	#000h, R4
@@ -381,7 +380,7 @@ PostSaveStatus:
 ; ReadData:
 ;-------------------------------------------------------------------------------
 ReadData:
-	mov.w	#000Fh, R8		; Move bit mask into R8
+	mov.w	#001Fh, R8		; Move bit mask into R8
 	and.w	R7, R8			; Mask R7 using R8
 	or.w	#2000h, R8		; or R8 with 2000h to generate address
 
@@ -394,8 +393,8 @@ ReadData:
 	mov.w	#2000h, R8;
 
 PostReadStatus:
-	and.b	#00F0h, R7		; Update R7 with new address
-	and.b	#000Fh, R8		; Update R7 with new address
+	and.b	#00E0h, R7		; Update R7 with new address
+	and.b	#001Fh, R8		; Update R7 with new address
 	or.b	R8, R7
 
 ;	mov.w 	#000h, R4
@@ -420,7 +419,7 @@ I2CDataLineInput:
 ; I2CAckRequest:
 ;-------------------------------------------------------------------------------
 I2CAckRequest:
-;	bis.b	#BIT2, &P5OUT
+	call	#I2CDataLineInput
 
 AckWait1:
 	; if ack 1 the bis bit1 r7: 0 then 0
@@ -437,7 +436,9 @@ ClkTest:
 AckWait2:
 	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high
 	jnz		AckWait2
-;	bic.b	#BIT2, &P5OUT
+
+	call	#I2CDataLineOutput
+
 	ret
     nop
 
@@ -546,11 +547,11 @@ SecondsData4:	.short    0000h
 MinutesAddr5:	.short    0001h
 MinutesData5:	.short    0000h
 HoursAddr6:		.short    0002h
-HoursData6:		.space    2
+HoursData6:		.short    0000h
 TempAddr7:		.short    0011h
-TempData7:		.space    2
+TempData7:		.short    0000h
 TempAddr8:		.short    0012h
-TempData8:		.space    2
+TempData8:		.short    0000h
 ;~~~~~~~~~~~~~~~~~~~~~~~~~ End Data Memory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~ INTERRUPT SERVICE ROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
