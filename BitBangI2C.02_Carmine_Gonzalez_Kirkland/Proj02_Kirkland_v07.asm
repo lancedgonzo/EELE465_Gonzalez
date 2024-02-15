@@ -200,7 +200,7 @@ ReadLoop:
 		call	#I2CAckRequest
 
 		call	#I2CRx				; I2C Transmit loaded bit
-		call	#I2CAckRequest
+		call	#I2CTxNack
 
 		call	#I2CStop		; I2C Stop Condition
 		call	#Stop_SCL
@@ -277,6 +277,27 @@ Start_SCL:
 
     ret
 ; --------------- END Start_SCL ------------------------------------------------
+
+;-------------------------------------------------------------------------------
+; I2CTxAck: Transmit data stored in R4.
+;-------------------------------------------------------------------------------
+I2CTxAck:
+	mov.b	#00001h, R6		; 1 bit being sent
+	mov.w	#00000h, R4
+	call	#I2CTx
+	ret
+;--------------- END I2CTxAck ------------------------------------------------
+
+;-------------------------------------------------------------------------------
+; I2CTxAck: Transmit data stored in R4.
+;-------------------------------------------------------------------------------
+I2CTxNack:
+	mov.b	#00001h, R6		; 1 bit being sent
+	mov.w	#08000h, R4
+	call	#I2CTx
+	ret
+;--------------- END I2CTxAck ------------------------------------------------
+
 
 ;-------------------------------------------------------------------------------
 ; I2CTx: Transmit data stored in R4.
@@ -537,11 +558,11 @@ DataDelay:
     .retain                 ; keep section even if not used
 
 SecondsAddr1:	.short    0000h
-SecondsData1:	.short    0050h
+SecondsData1:	.short    0030h
 MinutesAddr2:	.short    0001h
-MinutesData2:	.short    0056h
+MinutesData2:	.short    0011h
 HoursAddr3:		.short    0002h
-HoursData3:		.short    0010h
+HoursData3:		.short    0013h
 SecondsAddr4:	.short    0000h
 SecondsData4:	.short    0000h
 MinutesAddr5:	.short    0001h
