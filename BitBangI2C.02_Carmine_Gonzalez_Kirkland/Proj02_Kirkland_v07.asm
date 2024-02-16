@@ -193,7 +193,7 @@ ReadLoop:
 
 		call	#I2CRx				; I2C Recieve loaded bit, then transmit nack and stop
 		call	#SaveData			; Save bit to memory
-		call	#I2CTxNack
+		call	#I2CTxNack			; Nack and stop
 
 ;		call	#I2CStop			; I2C Stop Condition
 
@@ -252,7 +252,7 @@ I2CStartRecieve:
 ;---------------------------- end of I2CStartRecieve ---------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CTxAck: Transmit data stored in R4.
+; I2CTxAck: Load 0 to R4 and Transmit data stored in R4.
 ;-------------------------------------------------------------------------------
 I2CTxAck:
 	mov.w	#00001h, R6		; 1 bit being sent
@@ -262,7 +262,7 @@ I2CTxAck:
 ;--------------- END I2CTxAck ------------------------------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CTxNack: Transmit data stored in R4.
+; I2CTxNack: Load 1 to R4 and Transmit data stored in R4. Then run through stop condition
 ;-------------------------------------------------------------------------------
 I2CTxNack:
 	mov.w	#0001h, R6		; 1 bit being sent
@@ -363,7 +363,7 @@ I2CRxHighPoll:
 ;--------------------------------- end of I2CTx --------------------------------
 
 ;-------------------------------------------------------------------------------
-; SaveData:
+; SaveData: Move R4 into address and increment address
 ;-------------------------------------------------------------------------------
 SaveData:
 	mov.w	#001Fh, R8		; Move bit mask into R8
@@ -391,7 +391,7 @@ PostSaveStatus:
 ;--------------------------- end of I2CDataLineInput ---------------------------
 
 ;-------------------------------------------------------------------------------
-; ReadData:
+; ReadData: Read data from address into R4 and increment address
 ;-------------------------------------------------------------------------------
 ReadData:
 	mov.w	#001Fh, R8		; Move bit mask into R8
@@ -417,7 +417,7 @@ PostReadStatus:
 ;--------------------------- end of I2CDataLineInput ---------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CDataLineInput:
+; I2CDataLineInput:	Set data line to input
 ;-------------------------------------------------------------------------------
 I2CDataLineInput:
 	;INIT P5.2 as input with pull up
@@ -430,7 +430,7 @@ I2CDataLineInput:
 ;--------------------------- end of I2CDataLineInput ---------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CAckRequest:
+; I2CAckRequest: Wait for ack and move to status register
 ;-------------------------------------------------------------------------------
 I2CAckRequest:
 	call	#I2CDataLineInput
@@ -461,7 +461,7 @@ AckWait2:
 ;----------------- END I2CAckReques Subroutine----------------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CDataLineOutput:
+; I2CDataLineOutput: Set dataline as output while maintaining its current value
 ;-------------------------------------------------------------------------------
 I2CDataLineOutput:
 	bit.b	#BIT2, &P5IN		; Test input line, and set output to match before setting P5.2 as output
