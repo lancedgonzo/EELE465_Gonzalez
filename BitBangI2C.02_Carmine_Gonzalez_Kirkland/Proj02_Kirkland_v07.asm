@@ -80,7 +80,7 @@ Init:
         bis.b	#BIT6, &P3DIR	; Initializing P3.6 as output
         bis.b	#BIT6, &P3OUT	; Configuring ON
 
-	; Configuring Timer B0 - 1.05 (measured 1.00) s = 1E-6 * 8 * 5 * 104
+	; Configuring Timer B0 - 5 kHz
 		bis.w	#TBCLR, &TB0CTL			; Clear timers & dividers
 		bis.w	#TBSSEL__SMCLK, &TB0CTL	; Set SMCLK as the source
 		bis.w	#MC__UP, &TB0CTL		; Set mode as up
@@ -109,7 +109,6 @@ Init:
 ;-------------------------------------------------------------------------------
 Main:
 		bis.b	#BIT5, &P4OUT		; Disabling RTC reset
-		jmp		ReadLoopInit
 		mov.b	#03h, R9			; 3 init outputs
 InitLoop:
 
@@ -147,7 +146,7 @@ InitLoop:
 		call	#I2CReset
 		dec.b	R9
 		jnz		InitLoop 			; Continue Init until loop counter 0
-		jmp		Main			; todo update to readloopinit
+		jmp		ReadLoopInit		; Then go to read loop
 
 AckFailedInit:
 		call	#I2CStop		; I2C Stop Condition
@@ -193,11 +192,11 @@ ReadLoop:
 		jnz		AckFailedRead
 
 		call	#I2CRx				; I2C Recieve loaded bit, then transmit nack and stop
+		call	#SaveData			; Save bit to memory
 		call	#I2CTxNack
 
-		call	#I2CStop			; I2C Stop Condition
+;		call	#I2CStop			; I2C Stop Condition
 
-		call	#SaveData			; Save bit to memory
 		call	#I2CReset
 
 		; decrement loop counter
@@ -213,71 +212,83 @@ AckFailedRead:
 ;--------------------------------- end of main ---------------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CStartSend:
+; I2CStartSend: Load address into memory with write bit set, then start clock
 ;-------------------------------------------------------------------------------
 I2CStartSend:
 	bic.b	#BIT2, &P5OUT	; SDA Low
 
-	mov.b	#00068h, R4		; 1101 000 reversed from 0xEB Start bit + address 6B
+	mov.b	#00068h, R4		; RTC Address
 	rla.w	R4				; one less byte being sent due to start condition
-	bic.b	#BIT0, R4		; Clear readwrite bit
+	bic.b	#BIT0, R4		; Set write bit
 
 	swpb	R4
 	mov.b	#00008h, R6		; full byte being sent
 
 	call 	#DataDelay
-	call 	#Start_SCL
+    bic.w   #CCIFG, &TB0CCTL0
+	bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
 	ret
 	nop
 ;----------------------------- end of I2CStartSend -----------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CStartRecieve:
+; I2CStartRecieve: Load address into memory with read bit set, then start clock
 ;-------------------------------------------------------------------------------
 I2CStartRecieve:
 	bic.b	#BIT2, &P5OUT	; SDA Low
 
-	mov.b	#00068h, R4		; 1101 000 reversed from 0xEB Start bit + address 6B
+	mov.b	#00068h, R4		; RTC Address
 	rla.w	R4				; one less byte being sent due to start condition
-	bis.b	#BIT0, R4		; Set readwrite bit
+	bis.b	#BIT0, R4		; Set read bit
 
 	swpb	R4
 	mov.b	#00008h, R6		; full byte being sent
 
 	call 	#DataDelay
-	call 	#Start_SCL
+    bic.w   #CCIFG, &TB0CCTL0
+	bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
 	ret
 	nop
 ;---------------------------- end of I2CStartRecieve ---------------------------
 
 ;-------------------------------------------------------------------------------
-; Start_SCL:
-;-------------------------------------------------------------------------------
-Start_SCL:
-    bic.w   #CCIFG, &TB0CCTL0
-	bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
-
-    ret
-; --------------- END Start_SCL ------------------------------------------------
-
-;-------------------------------------------------------------------------------
 ; I2CTxAck: Transmit data stored in R4.
 ;-------------------------------------------------------------------------------
 I2CTxAck:
-	mov.b	#00001h, R6		; 1 bit being sent
+	mov.w	#00001h, R6		; 1 bit being sent
 	mov.w	#00000h, R4
 	call	#I2CTx
 	ret
 ;--------------- END I2CTxAck ------------------------------------------------
 
 ;-------------------------------------------------------------------------------
-; I2CTxAck: Transmit data stored in R4.
+; I2CTxNack: Transmit data stored in R4.
 ;-------------------------------------------------------------------------------
 I2CTxNack:
-	mov.b	#00001h, R6		; 1 bit being sent
+	mov.w	#0001h, R6		; 1 bit being sent
 	mov.w	#08000h, R4
 	call	#I2CTx
+
+NackEndBegin:
+	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high before raising output to high for stop condition.
+	jz		NackEndBegin
+
+	call 	#DataDelay
+	bic.b	#BIT2, &P5OUT
+
+NackEnd:
+	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high before raising output to high for stop condition.
+	jnz		NackEnd
+	call 	#DataDelay
+	bis.b	#BIT2, &P5OUT
+
+    bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
+    bic.w   #CCIFG, &TB0CCTL0
+
+	mov.w	#0, TB0R
+
 	ret
+	nop
 ;--------------- END I2CTxAck ------------------------------------------------
 
 
@@ -332,14 +343,14 @@ RxInputLow:
 RxInputHigh:
 	bis.b	#BIT0, R4
 RxInputSetDone:
-	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for low
+	bit.b	#BIT7, R7		; Test clock, keep waiting for low
 
 	jnz		I2CRxLowPoll
 
 	rla.b	R4
 
 I2CRxHighPoll:
-	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for low
+	bit.b	#BIT7, R7		; Test clock, keep waiting for high
 	jz		I2CRxHighPoll
 
 
@@ -430,17 +441,19 @@ AckWait1:
 	jnz		SetAck
 UnsetAck:
 	bic.b	#BIT6, R7
+    bic.b   #BIT2, &P5OUT
 	jmp		ClkTest
 SetAck:
 	bis.b	#BIT6, R7
+    bis.b   #BIT2, &P5OUT
 ClkTest:
 	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high
 	jz		AckWait1
 AckWait2:
+	call	#I2CDataLineOutput
 	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high
 	jnz		AckWait2
 
-	call	#I2CDataLineOutput
 
 	ret
     nop
@@ -505,7 +518,7 @@ I2CReset:
 ; I2CClockDelay: delay for clock pulses - not tuned todo
 ;-------------------------------------------------------------------------------
 I2CClockDelay:
-	mov.w	#000EFh, R5				; Tuned for 1s Delay with 8 loops
+	mov.w	#000EFh, R5				; Small delay
 ClockDelayLoop:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		ClockDelayLoop
@@ -535,9 +548,9 @@ DataDelay:
 SecondsAddr1:	.short    0000h
 SecondsData1:	.short    0030h
 MinutesAddr2:	.short    0001h
-MinutesData2:	.short    0011h
+MinutesData2:	.short    0040h
 HoursAddr3:		.short    0002h
-HoursData3:		.short    0013h
+HoursData3:		.short    0011h
 SecondsAddr4:	.short    0000h
 SecondsData4:	.short    0000h
 MinutesAddr5:	.short    0001h
