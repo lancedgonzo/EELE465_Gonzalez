@@ -2,11 +2,10 @@
 ; MSP430 Assembler Code Template for use with TI Code Composer Studio
 ; 	EELE465
 ;	Written by: Zach Carmean, Lance Gonzalez, Grant Kirkland
-;   Working: Grant Kirkland
 ;	Project 02 - Feb 2 2024
 ;
 ;	Summary:
-;
+;		Program initalizes real-time clock module before reading the time and temperature from it using the I2C protocol
 ;
 ;	Version Summary:
 ;   v01:
@@ -16,6 +15,7 @@
 ;	v05: Merged lances and zachs code. Working stop transmit and start code
 ;	v06: Merged zachs acknowledge code. Updated clock speed to 5kHz. Added code to receive data from RTC
 ;	v07: Set up memory allocation. Adjusted the read data and save data sections to cycle through memory positions
+;	v08: Fixed bug with stop conditions, and data saving. Updated comments
 ;
 ;	Ports:
 ;	    P3.6 - SCL
@@ -43,9 +43,6 @@
 ;		SQW - N/C
 ;		RST - P4.5
 ;
-;	Todo:
-; 		* Add save to data memory functionality
-;		* Flowchart
 ;-------------------------------------------------------------------------------
             .cdecls C,LIST,"msp430.h"       ; Include device header file
             
@@ -195,7 +192,7 @@ ReadLoop:
 		call	#SaveData			; Save bit to memory
 		call	#I2CTxNack			; Nack and stop
 
-;		call	#I2CStop			; I2C Stop Condition
+		call	#I2CStop			; I2C Stop Condition
 
 		call	#I2CReset
 
@@ -271,21 +268,21 @@ I2CTxNack:
 
 NackEndBegin:
 	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high before raising output to high for stop condition.
+	bic.b	#BIT2, &P5OUT
 	jz		NackEndBegin
 
 	call 	#DataDelay
-	bic.b	#BIT2, &P5OUT
 
 NackEnd:
-	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high before raising output to high for stop condition.
-	jnz		NackEnd
-	call 	#DataDelay
-	bis.b	#BIT2, &P5OUT
+;	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high before raising output to high for stop condition.
+;	jnz		NackEnd
+;	call 	#DataDelay
+;	bis.b	#BIT2, &P5OUT
 
-    bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
-    bic.w   #CCIFG, &TB0CCTL0
+;    bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
+;    bic.w   #CCIFG, &TB0CCTL0
 
-	mov.w	#0, TB0R
+;	mov.w	#0, TB0R
 
 	ret
 	nop
@@ -484,6 +481,7 @@ EndDataLineOutput:
 ;-------------------------------------------------------------------------------
 I2CStop:
 	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high before raising output to high for stop condition.
+    bic.b   #BIT2, &P5OUT
 	jz		I2CStop
 
 StopHigh:
@@ -518,7 +516,7 @@ I2CReset:
 ; I2CClockDelay: delay for clock pulses - not tuned todo
 ;-------------------------------------------------------------------------------
 I2CClockDelay:
-	mov.w	#000EFh, R5				; Small delay
+	mov.w	#0001Fh, R5				; Small delay
 ClockDelayLoop:
 	dec.w	R5						; Loop through the small delay until zero, then restart if R5 is not zero. Otherwise return.
 	jnz		ClockDelayLoop
