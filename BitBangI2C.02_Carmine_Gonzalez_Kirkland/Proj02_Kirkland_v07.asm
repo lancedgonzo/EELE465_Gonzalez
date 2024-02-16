@@ -80,16 +80,13 @@ Init:
         bis.b	#BIT6, &P3DIR	; Initializing P3.6 as output
         bis.b	#BIT6, &P3OUT	; Configuring ON
 
-	; Configuring Timer B0 - 1.05 (measured 1.00) s = 1E-6 * 8 * 5 * 26250
+	; Configuring Timer B0 - 1.05 (measured 1.00) s = 1E-6 * 8 * 5 * 104
 		bis.w	#TBCLR, &TB0CTL			; Clear timers & dividers
 		bis.w	#TBSSEL__SMCLK, &TB0CTL	; Set SMCLK as the source
 		bis.w	#MC__UP, &TB0CTL		; Set mode as up
 		bis.w	#CNTL_0, &TB0CTL		; 16-bit counter length
 		mov.w	#00150, &TB0CCR0		; Setting Capture Compare Register 0
-		;bis.w	#ID__2, &TB0CTL			; Set divider to 8
-		;bis.w	#TBIDEX__5, &TB0EX0		; Set Expansion register divider to 5
 		bic.w	#CCIFG, &TB0CCTL0		; Clear interrupt flag - Capture/Compare
-		;bis.w	#CCIE, &TB0CCTL0		; Enable Capture/Compare interrupt for TB0
 
 	; Initialize Used Registers
         mov.w	#0, R4
@@ -98,12 +95,8 @@ Init:
         mov.w	#0, R7
         mov.w	#0, R8
         mov.w	#0, R9
-		bis.b	#BIT7, R7
+		bis.b	#BIT7, R7		; Set to match SCL
 
-;		bic.b 	#BIT4, R7		; Used for Seconds register save to data indicator
-;		bis.b 	#BIT5, R7 		; Used for Minutes register save to data indicator
-;		bis.b 	#BIT6, R7 		; Used for Hours register save to data indicator
-;		bis.b 	#BIT7, R7 		; Used for Temperature register save to data indicator
 
 		nop
 		bis.w	#GIE, SR				; Enable maskable interrupts
@@ -115,21 +108,20 @@ Init:
 ; Main: main subroutine
 ;-------------------------------------------------------------------------------
 Main:
-	bis.b	#BIT5, &P4OUT		; Disabling RTC reset
-	jmp		ReadLoopInit
-	mov.b	#03h, R9
+		bis.b	#BIT5, &P4OUT		; Disabling RTC reset
+		jmp		ReadLoopInit
+		mov.b	#03h, R9			; 3 init outputs
 InitLoop:
 
 	; Initialize the RTC Loop (1 iteration for each register to be adressed)
 		; Transmit Start condition, slave address transmit,
-		call 	#I2CStartSend		; I2C Start Condition / load address into memory
-		call	#I2CTx				; I2C Transmit loaded bit
+		call 	#I2CStartSend
+		call	#I2CTx
 		call	#I2CAckRequest
 
 		bit.b	#BIT6, R7			; Test if ack recieved
 		jnz		AckFailedInit
 
-		;-Address + Data
 		; Transmit First section of memory
 		call 	#ReadData
 		call	#I2CTx
@@ -146,27 +138,25 @@ InitLoop:
 		bit.b	#BIT6, R7			; Test if ack recieved
 		jnz		AckFailedInit
 
-;		call 	#I2CNACK		; DOESN'T Exist yet,
+;		call 	#I2CTxNack
 
 		; Stop condition
 		call	#I2CStop		; I2C Stop Condition
-		call	#Stop_SCL
 
 		; decrement loop counter
 		call	#I2CReset
 		dec.b	R9
 		jnz		InitLoop 			; Continue Init until loop counter 0
-		jmp		Main
+		jmp		Main			; todo update to readloopinit
 
 AckFailedInit:
 		call	#I2CStop		; I2C Stop Condition
-		call	#Stop_SCL
 		call	#I2CReset
 		jmp		Main
 
 ReadLoopInit:
-	mov.b	#05h, R9
-	bic.b	#BIT0, R7
+	mov.b	#05h, R9		; 5 memory addresses to cycle through
+	bic.b	#BIT0, R7		; Update status bit to point to first address
 	bic.b	#BIT1, R7
 	bis.b	#BIT2, R7
 	bis.b	#BIT3, R7
@@ -175,47 +165,40 @@ ReadLoopInit:
 ReadLoop:
 	; Reading Time loop
 		; Transmit start condition, slave address transmit
-		; consider combining into one subroutine?
-		call 	#I2CStartSend	; I2C Start Condition / load address into memory
-		call	#I2CTx				; I2C Transmit loaded bit
+		call 	#I2CStartSend
+		call	#I2CTx
 		call	#I2CAckRequest
 
 		bit.b	#BIT6, R7			; Test if ack recieved
 		jnz		AckFailedRead
 
+		; transmit address to read from
 		call 	#ReadData
-		call	#I2CTx				; I2C Transmit loaded bit
+		call	#I2CTx
 		call	#I2CAckRequest
 
 		bit.b	#BIT6, R7			; Test if ack recieved
 		jnz		AckFailedRead
 
-		call	#I2CStop		; I2C Stop Condition
-		call	#Stop_SCL
+		call	#I2CStop			; I2C Stop Condition
 
 		call	#I2CReset
 
-		call 	#I2CStartRecieve	; I2C Start Condition / load address into memory
-		call	#I2CTx				; I2C Transmit loaded bit
+		; Transmit start read condition
+		call 	#I2CStartRecieve
+		call	#I2CTx
 		call	#I2CAckRequest
 
-		call	#I2CRx				; I2C Transmit loaded bit
+		bit.b	#BIT6, R7			; Test if ack recieved
+		jnz		AckFailedRead
+
+		call	#I2CRx				; I2C Recieve loaded bit, then transmit nack and stop
 		call	#I2CTxNack
 
-		call	#I2CStop		; I2C Stop Condition
-		call	#Stop_SCL
+		call	#I2CStop			; I2C Stop Condition
 
-		call	#SaveData
+		call	#SaveData			; Save bit to memory
 		call	#I2CReset
-
-;		; Loop for 4 RTC registers
-;			; RTC register address + Read
-;			; Acknowledge
-;			; Recieve Data from RTC
-;			; NACK condition						; This will be important to stop the RTC from continuing onward
-;			; Save into data memory
-;
-;		; Stop condition
 
 		; decrement loop counter
 		dec.b	R9
@@ -224,7 +207,6 @@ ReadLoop:
 
 AckFailedRead:
 		call	#I2CStop		; I2C Stop Condition
-		call	#Stop_SCL
 		call	#I2CReset
 		jmp		ReadLoopInit
 
@@ -469,9 +451,7 @@ AckWait2:
 ; I2CDataLineOutput:
 ;-------------------------------------------------------------------------------
 I2CDataLineOutput:
-	;Re-INIT P5.2 as output
-	bis.b	#BIT2, &P5DIR	; Initializing pin as output
-	bit.b	#BIT6, R7			; Test if ack recieved
+	bit.b	#BIT2, &P5IN		; Test input line, and set output to match before setting P5.2 as output
 	jz		DataLineOutLow
 
     bis.b   #BIT2, &P5OUT
@@ -481,6 +461,7 @@ DataLineOutLow:
     bic.b   #BIT2, &P5OUT
 
 EndDataLineOutput:
+	bis.b	#BIT2, &P5DIR		; Reinitializing pin as output
     ret
     nop
 ;--------------------------- end of I2CDataLineOutput --------------------------
@@ -489,7 +470,7 @@ EndDataLineOutput:
 ; I2CStop: Transmit stop condition for I2C
 ;-------------------------------------------------------------------------------
 I2CStop:
-	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high
+	bit.b	#BIT7, R7		; Test clock if zero, keep waiting for high before raising output to high for stop condition.
 	jz		I2CStop
 
 StopHigh:
@@ -497,24 +478,18 @@ StopHigh:
 	bis.b	#BIT2, &P5OUT
 	call 	#DataDelay
 
-	ret
-	nop
-;------------------------------- end of I2CStart -------------------------------
-
-;-------------------------------------------------------------------------------
-; Stop_SCL:
-;-------------------------------------------------------------------------------
-Stop_SCL:
     bic.w   #CCIE, &TB0CCTL0            ; disble CCR0
     bic.w   #CCIFG, &TB0CCTL0
 
 	mov.w	#0, TB0R
 
-    ret
-; --------------- END Stop_SCL -------------------------------------------------
+	ret
+	nop
+;------------------------------- end of I2CStart -------------------------------
+
 
 ;-------------------------------------------------------------------------------
-; I2CReset: Holds both lines high for a clock cycle for debugging
+; I2CReset: Holds both lines high for a short time to put delays between outputs
 ;-------------------------------------------------------------------------------
 I2CReset:
 	bis.b	#BIT2, &P5OUT
@@ -578,7 +553,7 @@ TempData8:		.short    0000h
 ; ~~~~~~~~~~~~~~~~~~~~~~~~ INTERRUPT SERVICE ROUTINES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ;-------------------------------------------------------------------------------
-; ISR_TB0_CCR0
+; ISR_TB0_CCR0 - XOR output to toggle clock, also XOR status bit to keep synced to clock
 ;-------------------------------------------------------------------------------
 ISR_TB0_CCR0:
     xor.b   #BIT6, &P3OUT
